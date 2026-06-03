@@ -55,6 +55,39 @@ public class InputDateTest
     }
 
     [Fact]
+    public async Task RendersIdAttribute_WhenShouldUseFieldIdentifiersIsFalse_InteractiveMode()
+    {
+        var model = new TestModel();
+        var editContext = new EditContext(model) { ShouldUseFieldIdentifiers = false };
+        var rootComponent = new TestInputHostComponent<DateTime, TestInputDateComponent>
+        {
+            EditContext = editContext,
+            ValueExpression = () => model.DateProperty,
+        };
+
+        var componentId = await RenderAndGetInputDateComponentIdAsync(rootComponent);
+        var frames = _testRenderer.GetCurrentRenderTreeFrames(componentId);
+
+        var idAttribute = frames.Array.Single(f => f.FrameType == RenderTreeFrameType.Attribute && f.AttributeName == "id");
+        Assert.Equal("model_DateProperty", idAttribute.AttributeValue);
+    }
+
+    [Fact]
+    public async Task InputElementIsAssignedSuccessfully_ForNullableDateTime()
+    {
+        var model = new TestModelNullable();
+        var rootComponent = new TestInputHostComponent<DateTime?, TestInputDateNullableComponent>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+        };
+
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        Assert.NotNull(inputComponent.Element);
+    }
+
+    [Fact]
     public async Task RendersIdAttribute()
     {
         var model = new TestModel();
@@ -102,6 +135,11 @@ public class InputDateTest
         public DateTime DateProperty { get; set; }
     }
 
+    private class TestModelNullable
+    {
+        public DateTime? DateProperty { get; set; }
+    }
+
     private class TestInputDateComponent : InputDate<DateTime>
     {
         public async Task SetCurrentValueAsStringAsync(string value)
@@ -110,6 +148,14 @@ public class InputDateTest
             // (e.g., from @bind), except to simplify the test code there's an InvokeAsync
             // here. In production code it wouldn't normally be required because @bind
             // calls run on the sync context anyway.
+            await InvokeAsync(() => { base.CurrentValueAsString = value; });
+        }
+    }
+
+    private class TestInputDateNullableComponent : InputDate<DateTime?>
+    {
+        public async Task SetCurrentValueAsStringAsync(string value)
+        {
             await InvokeAsync(() => { base.CurrentValueAsString = value; });
         }
     }
