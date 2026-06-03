@@ -122,6 +122,310 @@ public class InputDateTest
         Assert.Equal("custom-date-id", idAttribute.AttributeValue);
     }
 
+    // Test DateTimeOffset support
+    [Fact]
+    public async Task ValidationErrorUsesDisplayAttributeName_DateTimeOffset()
+    {
+        var model = new TestModelDateTimeOffset();
+        var rootComponent = new TestInputHostComponent<DateTimeOffset, TestInputDateDateTimeOffsetComponent>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+            AdditionalAttributes = new Dictionary<string, object>
+                {
+                    { "DisplayName", "Date time property" }
+                }
+        };
+        var fieldIdentifier = FieldIdentifier.Create(() => model.DateProperty);
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        await inputComponent.SetCurrentValueAsStringAsync("invalidDate");
+
+        var validationMessages = rootComponent.EditContext.GetValidationMessages(fieldIdentifier);
+        Assert.NotEmpty(validationMessages);
+        Assert.Contains("The Date time property field must be a date.", validationMessages);
+    }
+
+    [Fact]
+    public async Task InputElementIsAssignedSuccessfully_DateTimeOffset()
+    {
+        var model = new TestModelDateTimeOffset();
+        var rootComponent = new TestInputHostComponent<DateTimeOffset, TestInputDateDateTimeOffsetComponent>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+        };
+
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        Assert.NotNull(inputComponent.Element);
+    }
+
+    [Fact]
+    public async Task InputElementIsAssignedSuccessfully_ForNullableDateTimeOffset()
+    {
+        var model = new TestModelNullableDateTimeOffset();
+        var rootComponent = new TestInputHostComponent<DateTimeOffset?, TestInputDateNullableDateTimeOffsetComponent>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+        };
+
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        Assert.NotNull(inputComponent.Element);
+    }
+
+    // Test DateOnly support
+    [Fact]
+    public async Task ValidationErrorUsesDisplayAttributeName_DateOnly()
+    {
+        var model = new TestModelDateOnly();
+        var rootComponent = new TestInputHostComponent<DateOnly, TestInputDateDateOnlyComponent>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+            AdditionalAttributes = new Dictionary<string, object>
+                {
+                    { "DisplayName", "Date only property" }
+                }
+        };
+        var fieldIdentifier = FieldIdentifier.Create(() => model.DateProperty);
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        await inputComponent.SetCurrentValueAsStringAsync("invalidDate");
+
+        var validationMessages = rootComponent.EditContext.GetValidationMessages(fieldIdentifier);
+        Assert.NotEmpty(validationMessages);
+        Assert.Contains("The Date only property field must be a date.", validationMessages);
+    }
+
+    [Fact]
+    public async Task InputElementIsAssignedSuccessfully_DateOnly()
+    {
+        var model = new TestModelDateOnly();
+        var rootComponent = new TestInputHostComponent<DateOnly, TestInputDateDateOnlyComponent>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+        };
+
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        Assert.NotNull(inputComponent.Element);
+    }
+
+    [Fact]
+    public async Task InputElementIsAssignedSuccessfully_ForNullableDateOnly()
+    {
+        var model = new TestModelNullableDateOnly();
+        var rootComponent = new TestInputHostComponent<DateOnly?, TestInputDateNullableDateOnlyComponent>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+        };
+
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        Assert.NotNull(inputComponent.Element);
+    }
+
+    // Test TimeOnly support
+    [Fact]
+    public async Task ValidationErrorUsesDisplayAttributeName_TimeOnly()
+    {
+        var model = new TestModelTimeOnly();
+        var rootComponent = new TestInputHostComponent<TimeOnly, TestInputDateTimeOnlyComponent>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.TimeProperty,
+            AdditionalAttributes = new Dictionary<string, object>
+                {
+                    { "DisplayName", "Time property" }
+                }
+        };
+        var fieldIdentifier = FieldIdentifier.Create(() => model.TimeProperty);
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        await inputComponent.SetCurrentValueAsStringAsync("invalidTime");
+
+        var validationMessages = rootComponent.EditContext.GetValidationMessages(fieldIdentifier);
+        Assert.NotEmpty(validationMessages);
+        Assert.Contains("The Time property field must be a time.", validationMessages);
+    }
+
+    [Fact]
+    public async Task InputElementIsAssignedSuccessfully_TimeOnly()
+    {
+        var model = new TestModelTimeOnly();
+        var rootComponent = new TestInputHostComponent<TimeOnly, TestInputDateTimeOnlyComponent>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.TimeProperty,
+        };
+
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        Assert.NotNull(inputComponent.Element);
+    }
+
+    [Fact]
+    public async Task InputElementIsAssignedSuccessfully_ForNullableTimeOnly()
+    {
+        var model = new TestModelNullableTimeOnly();
+        var rootComponent = new TestInputHostComponent<TimeOnly?, TestInputDateNullableTimeOnlyComponent>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.TimeProperty,
+        };
+
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        Assert.NotNull(inputComponent.Element);
+    }
+
+    // Test InputDateType combinations with DateTime
+    [Fact]
+    public async Task ValidationErrorWithDateTimeLocalType()
+    {
+        var model = new TestModel();
+        var rootComponent = new TestInputHostComponent<DateTime, TestInputDateComponentWithType>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+            AdditionalAttributes = new Dictionary<string, object>
+                {
+                    { "Type", InputDateType.DateTimeLocal }
+                }
+        };
+        var fieldIdentifier = FieldIdentifier.Create(() => model.DateProperty);
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        await inputComponent.SetCurrentValueAsStringAsync("invalidDateTime");
+
+        var validationMessages = rootComponent.EditContext.GetValidationMessages(fieldIdentifier);
+        Assert.NotEmpty(validationMessages);
+        Assert.Contains("The DateProperty field must be a date and time.", validationMessages);
+    }
+
+    [Fact]
+    public async Task ValidationErrorWithMonthType()
+    {
+        var model = new TestModel();
+        var rootComponent = new TestInputHostComponent<DateTime, TestInputDateComponentWithType>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+            AdditionalAttributes = new Dictionary<string, object>
+                {
+                    { "Type", InputDateType.Month }
+                }
+        };
+        var fieldIdentifier = FieldIdentifier.Create(() => model.DateProperty);
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        await inputComponent.SetCurrentValueAsStringAsync("invalidMonth");
+
+        var validationMessages = rootComponent.EditContext.GetValidationMessages(fieldIdentifier);
+        Assert.NotEmpty(validationMessages);
+        Assert.Contains("The DateProperty field must be a year and month.", validationMessages);
+    }
+
+    [Fact]
+    public async Task ValidationErrorWithTimeType()
+    {
+        var model = new TestModel();
+        var rootComponent = new TestInputHostComponent<DateTime, TestInputDateComponentWithType>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+            AdditionalAttributes = new Dictionary<string, object>
+                {
+                    { "Type", InputDateType.Time }
+                }
+        };
+        var fieldIdentifier = FieldIdentifier.Create(() => model.DateProperty);
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        await inputComponent.SetCurrentValueAsStringAsync("invalidTime");
+
+        var validationMessages = rootComponent.EditContext.GetValidationMessages(fieldIdentifier);
+        Assert.NotEmpty(validationMessages);
+        Assert.Contains("The DateProperty field must be a time.", validationMessages);
+    }
+
+    // Test InputDateType with nullable types
+    [Fact]
+    public async Task ValidationErrorWithDateTimeLocalType_Nullable()
+    {
+        var model = new TestModelNullable();
+        var rootComponent = new TestInputHostComponent<DateTime?, TestInputDateNullableComponentWithType>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+            AdditionalAttributes = new Dictionary<string, object>
+                {
+                    { "Type", InputDateType.DateTimeLocal }
+                }
+        };
+        var fieldIdentifier = FieldIdentifier.Create(() => model.DateProperty);
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        await inputComponent.SetCurrentValueAsStringAsync("invalidDateTime");
+
+        var validationMessages = rootComponent.EditContext.GetValidationMessages(fieldIdentifier);
+        Assert.NotEmpty(validationMessages);
+        Assert.Contains("The DateProperty field must be a date and time.", validationMessages);
+    }
+
+    // Test DateTimeOffset with different InputDateType
+    [Fact]
+    public async Task DateTimeOffsetWithMonthType()
+    {
+        var model = new TestModelDateTimeOffset();
+        var rootComponent = new TestInputHostComponent<DateTimeOffset, TestInputDateDateTimeOffsetComponentWithType>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+            AdditionalAttributes = new Dictionary<string, object>
+                {
+                    { "Type", InputDateType.Month }
+                }
+        };
+        var fieldIdentifier = FieldIdentifier.Create(() => model.DateProperty);
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        await inputComponent.SetCurrentValueAsStringAsync("invalidMonth");
+
+        var validationMessages = rootComponent.EditContext.GetValidationMessages(fieldIdentifier);
+        Assert.NotEmpty(validationMessages);
+        Assert.Contains("The DateProperty field must be a year and month.", validationMessages);
+    }
+
+    // Test DateOnly with different InputDateType
+    [Fact]
+    public async Task DateOnlyWithTimeType()
+    {
+        var model = new TestModelDateOnly();
+        var rootComponent = new TestInputHostComponent<DateOnly, TestInputDateDateOnlyComponentWithType>
+        {
+            EditContext = new EditContext(model),
+            ValueExpression = () => model.DateProperty,
+            AdditionalAttributes = new Dictionary<string, object>
+                {
+                    { "Type", InputDateType.Time }
+                }
+        };
+        var fieldIdentifier = FieldIdentifier.Create(() => model.DateProperty);
+        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
+
+        await inputComponent.SetCurrentValueAsStringAsync("invalidTime");
+
+        var validationMessages = rootComponent.EditContext.GetValidationMessages(fieldIdentifier);
+        Assert.NotEmpty(validationMessages);
+        Assert.Contains("The DateProperty field must be a time.", validationMessages);
+    }
+
     private async Task<int> RenderAndGetInputDateComponentIdAsync(TestInputHostComponent<DateTime, TestInputDateComponent> hostComponent)
     {
         var hostComponentId = _testRenderer.AssignRootComponentId(hostComponent);
@@ -140,6 +444,36 @@ public class InputDateTest
         public DateTime? DateProperty { get; set; }
     }
 
+    private class TestModelDateTimeOffset
+    {
+        public DateTimeOffset DateProperty { get; set; }
+    }
+
+    private class TestModelNullableDateTimeOffset
+    {
+        public DateTimeOffset? DateProperty { get; set; }
+    }
+
+    private class TestModelDateOnly
+    {
+        public DateOnly DateProperty { get; set; }
+    }
+
+    private class TestModelNullableDateOnly
+    {
+        public DateOnly? DateProperty { get; set; }
+    }
+
+    private class TestModelTimeOnly
+    {
+        public TimeOnly TimeProperty { get; set; }
+    }
+
+    private class TestModelNullableTimeOnly
+    {
+        public TimeOnly? TimeProperty { get; set; }
+    }
+
     private class TestInputDateComponent : InputDate<DateTime>
     {
         public async Task SetCurrentValueAsStringAsync(string value)
@@ -154,6 +488,98 @@ public class InputDateTest
 
     private class TestInputDateNullableComponent : InputDate<DateTime?>
     {
+        public async Task SetCurrentValueAsStringAsync(string value)
+        {
+            await InvokeAsync(() => { base.CurrentValueAsString = value; });
+        }
+    }
+
+    private class TestInputDateDateTimeOffsetComponent : InputDate<DateTimeOffset>
+    {
+        public async Task SetCurrentValueAsStringAsync(string value)
+        {
+            await InvokeAsync(() => { base.CurrentValueAsString = value; });
+        }
+    }
+
+    private class TestInputDateNullableDateTimeOffsetComponent : InputDate<DateTimeOffset?>
+    {
+        public async Task SetCurrentValueAsStringAsync(string value)
+        {
+            await InvokeAsync(() => { base.CurrentValueAsString = value; });
+        }
+    }
+
+    private class TestInputDateDateOnlyComponent : InputDate<DateOnly>
+    {
+        public async Task SetCurrentValueAsStringAsync(string value)
+        {
+            await InvokeAsync(() => { base.CurrentValueAsString = value; });
+        }
+    }
+
+    private class TestInputDateNullableDateOnlyComponent : InputDate<DateOnly?>
+    {
+        public async Task SetCurrentValueAsStringAsync(string value)
+        {
+            await InvokeAsync(() => { base.CurrentValueAsString = value; });
+        }
+    }
+
+    private class TestInputDateTimeOnlyComponent : InputDate<TimeOnly>
+    {
+        public async Task SetCurrentValueAsStringAsync(string value)
+        {
+            await InvokeAsync(() => { base.CurrentValueAsString = value; });
+        }
+    }
+
+    private class TestInputDateNullableTimeOnlyComponent : InputDate<TimeOnly?>
+    {
+        public async Task SetCurrentValueAsStringAsync(string value)
+        {
+            await InvokeAsync(() => { base.CurrentValueAsString = value; });
+        }
+    }
+
+    private class TestInputDateComponentWithType : InputDate<DateTime>
+    {
+        [Parameter]
+        public override InputDateType Type { get; set; }
+
+        public async Task SetCurrentValueAsStringAsync(string value)
+        {
+            await InvokeAsync(() => { base.CurrentValueAsString = value; });
+        }
+    }
+
+    private class TestInputDateNullableComponentWithType : InputDate<DateTime?>
+    {
+        [Parameter]
+        public override InputDateType Type { get; set; }
+
+        public async Task SetCurrentValueAsStringAsync(string value)
+        {
+            await InvokeAsync(() => { base.CurrentValueAsString = value; });
+        }
+    }
+
+    private class TestInputDateDateTimeOffsetComponentWithType : InputDate<DateTimeOffset>
+    {
+        [Parameter]
+        public override InputDateType Type { get; set; }
+
+        public async Task SetCurrentValueAsStringAsync(string value)
+        {
+            await InvokeAsync(() => { base.CurrentValueAsString = value; });
+        }
+    }
+
+    private class TestInputDateDateOnlyComponentWithType : InputDate<DateOnly>
+    {
+        [Parameter]
+        public override InputDateType Type { get; set; }
+
         public async Task SetCurrentValueAsStringAsync(string value)
         {
             await InvokeAsync(() => { base.CurrentValueAsString = value; });

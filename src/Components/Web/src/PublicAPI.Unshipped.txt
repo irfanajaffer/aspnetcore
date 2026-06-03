@@ -113,3 +113,8 @@ Microsoft.AspNetCore.Components.Forms.Label<TValue>.ChildContent.set -> void
 Microsoft.AspNetCore.Components.Forms.Label<TValue>.For.get -> System.Linq.Expressions.Expression<System.Func<TValue>!>?
 Microsoft.AspNetCore.Components.Forms.Label<TValue>.For.set -> void
 Microsoft.AspNetCore.Components.Forms.Label<TValue>.Label() -> void
+*REMOVED*Microsoft.AspNetCore.Components.Forms.InputDate<TValue>.Type.get -> Microsoft.AspNetCore.Components.Forms.InputDateType
+*REMOVED*Microsoft.AspNetCore.Components.Forms.InputDate<TValue>.Type.set -> void
+virtual Microsoft.AspNetCore.Components.Forms.InputDate<TValue>.Type.get -> Microsoft.AspNetCore.Components.Forms.InputDateType
+virtual Microsoft.AspNetCore.Components.Forms.InputDate<TValue>.Type.set -> void
+override Microsoft.AspNetCore.Components.Forms.InputDate<TValue>.SetParametersAsync(Microsoft.AspNetCore.Components.ParameterView parameters) -> System.Threading.Tasks.Task!
