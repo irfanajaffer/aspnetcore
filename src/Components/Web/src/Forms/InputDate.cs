@@ -32,7 +32,7 @@ public class InputDate<[DynamicallyAccessedMembers(DynamicallyAccessedMemberType
     /// <summary>
     /// Gets or sets the type of HTML input to be rendered.
     /// </summary>
-    [Parameter] public virtual InputDateType Type { get; set; } = InputDateType.Date;
+    [Parameter] public InputDateType Type { get; set; } = InputDateType.Date;
 
     /// <summary>
     /// Gets or sets the error message used when displaying an a parsing error.
@@ -61,23 +61,6 @@ public class InputDate<[DynamicallyAccessedMembers(DynamicallyAccessedMemberType
         {
             throw new InvalidOperationException($"Unsupported {GetType()} type param '{type}'.");
         }
-    }
-
-    /// <inheritdoc />
-    public override Task SetParametersAsync(ParameterView parameters)
-    {
-        var hasType = parameters.TryGetValue<InputDateType>(nameof(Type), out var _);
-
-        if (!hasType)
-        {
-            var underlying = Nullable.GetUnderlyingType(typeof(TValue)) ?? typeof(TValue);
-            if (underlying == typeof(TimeOnly))
-            {
-                Type = InputDateType.Time;
-            }
-        }
-
-        return base.SetParametersAsync(parameters);
     }
 
     /// <inheritdoc />

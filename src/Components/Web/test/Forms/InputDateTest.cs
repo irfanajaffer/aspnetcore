@@ -11,32 +11,6 @@ public class InputDateTest
     private readonly TestRenderer _testRenderer = new TestRenderer();
 
     [Fact]
-    public async Task ValidationErrorUsesDisplayAttributeName()
-    {
-        // Arrange
-        var model = new TestModel();
-        var rootComponent = new TestInputHostComponent<DateTime, TestInputDateComponent>
-        {
-            EditContext = new EditContext(model),
-            ValueExpression = () => model.DateProperty,
-            AdditionalAttributes = new Dictionary<string, object>
-                {
-                    { "DisplayName", "Date property" }
-                }
-        };
-        var fieldIdentifier = FieldIdentifier.Create(() => model.DateProperty);
-        var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
-
-        // Act
-        await inputComponent.SetCurrentValueAsStringAsync("invalidDate");
-
-        // Assert
-        var validationMessages = rootComponent.EditContext.GetValidationMessages(fieldIdentifier);
-        Assert.NotEmpty(validationMessages);
-        Assert.Contains("The Date property field must be a date.", validationMessages);
-    }
-
-    [Fact]
     public async Task InputElementIsAssignedSuccessfully()
     {
         // Arrange
@@ -230,28 +204,30 @@ public class InputDateTest
         Assert.NotNull(inputComponent.Element);
     }
 
-    // Test TimeOnly support
     [Fact]
-    public async Task ValidationErrorUsesDisplayAttributeName_TimeOnly()
+    public async Task ValidationErrorUsesDisplayAttributeName()
     {
-        var model = new TestModelTimeOnly();
-        var rootComponent = new TestInputHostComponent<TimeOnly, TestInputDateTimeOnlyComponent>
+        // Arrange
+        var model = new TestModel();
+        var rootComponent = new TestInputHostComponent<DateTime, TestInputDateComponent>
         {
             EditContext = new EditContext(model),
-            ValueExpression = () => model.TimeProperty,
+            ValueExpression = () => model.DateProperty,
             AdditionalAttributes = new Dictionary<string, object>
                 {
-                    { "DisplayName", "Time property" }
+                    { "DisplayName", "Date property" }
                 }
         };
-        var fieldIdentifier = FieldIdentifier.Create(() => model.TimeProperty);
+        var fieldIdentifier = FieldIdentifier.Create(() => model.DateProperty);
         var inputComponent = await InputRenderer.RenderAndGetComponent(rootComponent);
 
-        await inputComponent.SetCurrentValueAsStringAsync("invalidTime");
+        // Act
+        await inputComponent.SetCurrentValueAsStringAsync("invalidDate");
 
+        // Assert
         var validationMessages = rootComponent.EditContext.GetValidationMessages(fieldIdentifier);
         Assert.NotEmpty(validationMessages);
-        Assert.Contains("The Time property field must be a time.", validationMessages);
+        Assert.Contains("The Date property field must be a date.", validationMessages);
     }
 
     [Fact]
@@ -544,9 +520,6 @@ public class InputDateTest
 
     private class TestInputDateComponentWithType : InputDate<DateTime>
     {
-        [Parameter]
-        public override InputDateType Type { get; set; }
-
         public async Task SetCurrentValueAsStringAsync(string value)
         {
             await InvokeAsync(() => { base.CurrentValueAsString = value; });
@@ -555,9 +528,6 @@ public class InputDateTest
 
     private class TestInputDateNullableComponentWithType : InputDate<DateTime?>
     {
-        [Parameter]
-        public override InputDateType Type { get; set; }
-
         public async Task SetCurrentValueAsStringAsync(string value)
         {
             await InvokeAsync(() => { base.CurrentValueAsString = value; });
@@ -566,9 +536,6 @@ public class InputDateTest
 
     private class TestInputDateDateTimeOffsetComponentWithType : InputDate<DateTimeOffset>
     {
-        [Parameter]
-        public override InputDateType Type { get; set; }
-
         public async Task SetCurrentValueAsStringAsync(string value)
         {
             await InvokeAsync(() => { base.CurrentValueAsString = value; });
@@ -577,9 +544,6 @@ public class InputDateTest
 
     private class TestInputDateDateOnlyComponentWithType : InputDate<DateOnly>
     {
-        [Parameter]
-        public override InputDateType Type { get; set; }
-
         public async Task SetCurrentValueAsStringAsync(string value)
         {
             await InvokeAsync(() => { base.CurrentValueAsString = value; });
