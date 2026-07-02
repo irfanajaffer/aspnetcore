@@ -119,9 +119,12 @@ internal readonly struct CascadingParameterState
         var candidateProps = ComponentProperties.GetCandidateBindableProperties(componentType);
         foreach (var prop in candidateProps)
         {
-            var cascadingParameterAttribute = prop.GetCustomAttributes()
-                .OfType<CascadingParameterAttributeBase>().SingleOrDefault();
-            if (cascadingParameterAttribute != null)
+            // A property can have multiple CascadingParameterAttributeBase subtypes (e.g., [CascadingParameter]
+            // combined with [SupplyParameterFromQuery]). Each attribute represents a distinct cascading parameter
+            // to a different supplier type.
+            var cascadingParameterAttributes = prop.GetCustomAttributes()
+                .OfType<CascadingParameterAttributeBase>();
+            foreach (var cascadingParameterAttribute in cascadingParameterAttributes)
             {
                 result ??= new List<CascadingParameterInfo>();
                 result.Add(new CascadingParameterInfo(

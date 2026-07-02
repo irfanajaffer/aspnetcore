@@ -74,5 +74,49 @@ public abstract partial class Renderer
                 SkippingEventOnDisposedComponent(logger, componentId, eventHandlerId, eventArgs?.GetType().Name ?? "null");
             }
         }
+
+        [LoggerMessage(7, LogLevel.Debug, "Skipping cascading parameter update for component {ComponentId} ({ComponentType}): component was already disposed", EventName = "SkippingCascadingUpdateOnDisposedComponent", SkipEnabledCheck = true)]
+        private static partial void SkippingCascadingUpdateOnDisposedComponent(ILogger logger, int componentId, string? componentType);
+
+        public static void SkippingCascadingUpdateOnDisposedComponent(ILogger logger, ComponentState componentState)
+        {
+            if (logger.IsEnabled(LogLevel.Debug)) // This is almost always false, so skip the evaluations
+            {
+                SkippingCascadingUpdateOnDisposedComponent(logger, componentState.ComponentId, componentState.Component.GetType().FullName);
+            }
+        }
+
+        [LoggerMessage(8, LogLevel.Debug, "Stopped supplying single-delivery cascading parameters to component {ComponentId} ({ComponentType})", EventName = "StoppedSingleDeliveryCascadingParameters", SkipEnabledCheck = true)]
+        private static partial void StoppedSingleDeliveryCascadingParameters(ILogger logger, int componentId, string? componentType);
+
+        public static void StoppedSingleDeliveryCascadingParameters(ILogger logger, ComponentState componentState)
+        {
+            if (logger.IsEnabled(LogLevel.Debug)) // This is almost always false, so skip the evaluations
+            {
+                StoppedSingleDeliveryCascadingParameters(logger, componentState.ComponentId, componentState.Component.GetType().FullName);
+            }
+        }
+
+        [LoggerMessage(9, LogLevel.Debug, "Skipping render for component {ComponentId} ({ComponentType}) because it was disposed before rendering", EventName = "SkippingRenderOnDisposedComponent", SkipEnabledCheck = true)]
+        private static partial void SkippingRenderOnDisposedComponent(ILogger logger, int componentId, string? componentType);
+
+        public static void SkippingRenderOnDisposedComponent(ILogger logger, ComponentState componentState)
+        {
+            if (logger.IsEnabled(LogLevel.Debug)) // This is almost always false, so skip the evaluations
+            {
+                SkippingRenderOnDisposedComponent(logger, componentState.ComponentId, componentState.Component.GetType().FullName);
+            }
+        }
+
+        [LoggerMessage(10, LogLevel.Trace, "Supplying combined parameters to component {ComponentId} ({ComponentType}).", EventName = "SupplyingCombinedParameters", SkipEnabledCheck = true)]
+        private static partial void SupplyingCombinedParameters(ILogger logger, int componentId, string? componentType);
+
+        public static void SupplyingCombinedParameters(ILogger logger, ComponentState componentState)
+        {
+            if (logger.IsEnabled(LogLevel.Trace)) // This is a high-frequency path; only evaluate when Trace is enabled
+            {
+                SupplyingCombinedParameters(logger, componentState.ComponentId, componentState.Component.GetType().FullName);
+            }
+        }
     }
 }

@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Components.RenderTree;
 using Microsoft.AspNetCore.Components.Sections;
+using RenderTreeLog = Microsoft.AspNetCore.Components.RenderTree.Renderer.Log;
 
 namespace Microsoft.AspNetCore.Components.Rendering;
 
@@ -108,6 +109,8 @@ public class ComponentState : IAsyncDisposable
         // earlier entry in the render queue. In that case, rendering is a no-op.
         if (_componentWasDisposed)
         {
+            // Log that we're skipping rendering due to disposal
+            RenderTreeLog.SkippingRenderOnDisposedComponent(_renderer.Logger, this);
             return;
         }
 
@@ -217,6 +220,8 @@ public class ComponentState : IAsyncDisposable
         _hasCascadingParameters = remainingCascadingParameters is not null;
         _cascadingParameters = (IReadOnlyList<CascadingParameterState>?)remainingCascadingParameters ?? Array.Empty<CascadingParameterState>();
         _hasSingleDeliveryCascadingParameters = false;
+        // Emit a debug log indicating we've stopped supplying single-delivery cascading parameters
+        RenderTreeLog.StoppedSingleDeliveryCascadingParameters(_renderer.Logger, this);
     }
 
     internal void NotifyCascadingValueChanged(in ParameterViewLifetime lifetime)
@@ -227,6 +232,8 @@ public class ComponentState : IAsyncDisposable
         // values - that only happens when the ComponentState is processed later by the disposal queue.
         if (_componentWasDisposed)
         {
+            // Log that we're skipping cascading updates because the component is disposed
+            RenderTreeLog.SkippingCascadingUpdateOnDisposedComponent(_renderer.Logger, this);
             return;
         }
 
@@ -242,6 +249,10 @@ public class ComponentState : IAsyncDisposable
     // a consistent set to the recipient.
     private void SupplyCombinedParameters(ParameterView directAndCascadingParameters)
     {
+        // Emit a trace-level log for parameter supply. This is intentionally Trace because
+        // it's on a hot path and can be very noisy when enabled.
+        RenderTreeLog.SupplyingCombinedParameters(_renderer.Logger, this);
+
         var parametersStartTimestamp = ComponentsMetrics.IsSupported && _renderer.ComponentMetrics != null && _renderer.ComponentMetrics.IsParametersEnabled ? Stopwatch.GetTimestamp() : 0;
 
         // Normalize sync and async exceptions into a Task
