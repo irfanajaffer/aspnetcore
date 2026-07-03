@@ -344,6 +344,30 @@ public class FormsTest : ServerTestBase<ToggleExecutionModeServerFixture<Program
     }
 
     [Fact]
+    public void InputSelectMultiple_BoundToNullArray_DoesNotThrow()
+    {
+        var appElement = MountTypicalValidationComponent();
+        var container = Browser.Exists(By.ClassName("cities-nullable"));
+        var citiesNullableSelect = new SelectElement(container.FindElement(By.TagName("select")));
+        var citiesNullableLabel = Browser.Exists(By.Id("selected-cities-nullable"));
+
+        Browser.Equal("null", () => citiesNullableLabel.Text);
+        Browser.True(() => citiesNullableSelect.IsMultiple);
+        Browser.Equal(0, () => citiesNullableSelect.AllSelectedOptions.Count);
+
+        citiesNullableSelect.SelectByText("San Francisco");
+        Browser.Equal("SanFrancisco", () => citiesNullableLabel.Text);
+
+        citiesNullableSelect.SelectByText("Tokyo");
+        Browser.Equal("SanFrancisco, Tokyo", () => citiesNullableLabel.Text);
+
+        citiesNullableSelect.DeselectByText("San Francisco");
+        citiesNullableSelect.DeselectByText("Tokyo");
+        Browser.Equal("empty", () => citiesNullableLabel.Text);
+        Browser.Equal(0, () => citiesNullableSelect.AllSelectedOptions.Count);
+    }
+
+    [Fact]
     public void InputCheckboxInteractsWithEditContext()
     {
         var appElement = MountTypicalValidationComponent();
@@ -625,8 +649,8 @@ public class FormsTest : ServerTestBase<ToggleExecutionModeServerFixture<Program
     public void InputComponentsRespondToAsynchronouslyAddedMessages()
     {
         var appElement = Browser.MountTestComponent<TypicalValidationComponent>();
-        var input = appElement.FindElement(By.CssSelector(".username input"));
-        var triggerAsyncErrorButton = appElement.FindElement(By.CssSelector(".username button"));
+        var input = appElement.FindElement(By.CssSelector(".name input"));
+        var triggerAsyncErrorButton = appElement.FindElement(By.CssSelector(".name button"));
         var messagesAccessor = CreateValidationMessagesAccessor(appElement);
 
         // Initially shows no error

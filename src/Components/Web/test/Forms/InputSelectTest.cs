@@ -261,12 +261,7 @@ public class InputSelectTest
 
         var component = await InputRenderer.RenderAndGetComponent(rootComponent);
 
-        var setArrayMethod = typeof(InputSelect<string[]?>).GetMethod(
-            "SetCurrentValueAsStringArray",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        Assert.NotNull(setArrayMethod);
-
-        var exception = Record.Exception(() => setArrayMethod!.Invoke(component, new object?[] { Array.Empty<string>() }));
+        var exception = Record.Exception(() => component.SetCurrentValueAsStringArray(Array.Empty<string>()));
 
         Assert.Null(exception);
         Assert.NotNull(component.CurrentValue);
@@ -286,12 +281,7 @@ public class InputSelectTest
 
         var component = await InputRenderer.RenderAndGetComponent(rootComponent);
 
-        var setArrayMethod = typeof(InputSelect<string[]?>).GetMethod(
-            "SetCurrentValueAsStringArray",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        Assert.NotNull(setArrayMethod);
-
-        var exception = Record.Exception(() => setArrayMethod!.Invoke(component, new object?[] { Array.Empty<string>() }));
+        var exception = Record.Exception(() => component.SetCurrentValueAsStringArray(Array.Empty<string>()));
 
         Assert.Null(exception);
         Assert.NotNull(component.CurrentValue);

@@ -67,6 +67,16 @@
         </InputSelect>
         <span id="selected-ticket-class">@person.TicketClass</span>
     </p>
+    <p class="cities-nullable">
+        @*Here, the 'multiple' attribute is inferred because we are binding to an array type.*@
+        <InputSelect @bind-Value="person.SelectedCitiesNullable">
+            <option value="@City.SanFrancisco">San Francisco</option>
+            <option value="@City.Tokyo">Tokyo</option>
+            <option value="@City.London">London</option>
+            <option value="@City.Madrid">Madrid</option>
+        </InputSelect>
+        <span id="selected-cities-nullable">@(person.SelectedCitiesNullable is null ? "null" : (person.SelectedCitiesNullable.Length == 0 ? "empty" : string.Join(", ", person.SelectedCitiesNullable)))</span>
+    </p>
     <p class="cities">
         @*Here, the 'multiple' attribute is inferred because we are binding to an array type.*@
         <InputSelect @bind-Value="person.SelectedCities">
@@ -243,6 +253,8 @@
         public string[] HostileStrings { get; set; } = new string[] { "\"", "{" };
 
         public City[] SelectedCitiesForDeselectAll { get; set; } = new[] { City.SanFrancisco, City.Tokyo };
+
+        public City[]? SelectedCitiesNullable { get; set; }
 
         public string? Username { get; set; }
     }
