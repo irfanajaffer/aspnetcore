@@ -41,8 +41,6 @@ public class InputSelectMultipleDeselectAllTest : ServerTestBase<BasicTestAppSer
     {
         Navigate($"{ServerPathBase}/forms/input-select-multiple-deselect-all");
 
-        // Sanity check: the page rendered through static SSR as a multi-select
-        // exposing all four city options.
         var citiesSelect = new SelectElement(Browser.FindElement(By.Id("cities")));
         Browser.True(() => citiesSelect.IsMultiple);
         Browser.Equal(4, () => citiesSelect.Options.Count);

@@ -649,8 +649,8 @@ public class FormsTest : ServerTestBase<ToggleExecutionModeServerFixture<Program
     public void InputComponentsRespondToAsynchronouslyAddedMessages()
     {
         var appElement = Browser.MountTestComponent<TypicalValidationComponent>();
-        var input = appElement.FindElement(By.CssSelector(".name input"));
-        var triggerAsyncErrorButton = appElement.FindElement(By.CssSelector(".name button"));
+        var input = appElement.FindElement(By.CssSelector(".username input"));
+        var triggerAsyncErrorButton = appElement.FindElement(By.CssSelector(".username button"));
         var messagesAccessor = CreateValidationMessagesAccessor(appElement);
 
         // Initially shows no error
