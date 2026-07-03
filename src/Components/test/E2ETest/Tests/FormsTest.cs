@@ -324,8 +324,6 @@ public class FormsTest : ServerTestBase<ToggleExecutionModeServerFixture<Program
         Browser.Equal("{,", () => hostileSelectLabel.Text);
     }
 
-  
-
     [Fact]
     public void InputSelectMultiple_EditForm_DeselectingAll_DoesNotThrow()
     {

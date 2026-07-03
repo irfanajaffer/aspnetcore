@@ -242,10 +242,6 @@
         [Required]
         public string[] HostileStrings { get; set; } = new string[] { "\"", "{" };
 
-        // Regression test property for null array handling in InputSelect binding
-        // This ensures that BindConverter.MakeArrayFormatter() safely handles null values
-        public City[]? SelectedCitiesNullable { get; set; } = null;
-
         public City[] SelectedCitiesForDeselectAll { get; set; } = new[] { City.SanFrancisco, City.Tokyo };
 
         public string? Username { get; set; }

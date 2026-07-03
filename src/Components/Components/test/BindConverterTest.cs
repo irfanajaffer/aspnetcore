@@ -452,6 +452,4 @@ public class BindConverterTest
 
         Assert.Equal(expected, actual);
     }
-
-    
 }
