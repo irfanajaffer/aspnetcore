@@ -1,5 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
+
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
@@ -338,8 +339,7 @@ public class BindConverterTest
 
         // Assert
         Assert.True(successfullyConverted);
-        Assert.NotNull(actual);
-        Assert.Equal(expected, actual!.Value);
+        Assert.Equal(expected, actual.Value);
     }
 
     [Theory]
@@ -380,7 +380,7 @@ public class BindConverterTest
     [TypeConverter(typeof(PersonConverter))]
     private class Person
     {
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; set; }
 
         public int Age { get; set; }
     }
