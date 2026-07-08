@@ -338,7 +338,7 @@ public class BindConverterTest
 
         // Assert
         Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual!.Value);
+        Assert.Equal(expected, actual.Value);
     }
 
     [Theory]
