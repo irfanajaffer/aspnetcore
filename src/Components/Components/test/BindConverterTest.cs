@@ -338,7 +338,6 @@ public class BindConverterTest
 
         // Assert
         Assert.True(successfullyConverted);
-        Assert.NotNull(actual);
         Assert.Equal(expected, actual!.Value);
     }
 
@@ -380,7 +379,7 @@ public class BindConverterTest
     [TypeConverter(typeof(PersonConverter))]
     private class Person
     {
-        public string Name { get; set; } = string.Empty;
+        public string Name { get; set; }
 
         public int Age { get; set; }
     }
