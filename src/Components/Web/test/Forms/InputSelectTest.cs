@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#nullable enable
-
 using Microsoft.AspNetCore.Components.RenderTree;
 using Microsoft.AspNetCore.Components.Test.Helpers;
 
@@ -237,7 +235,7 @@ public class InputSelectTest
     public async Task InputSelectMultipleWithNullValue_RendersSuccessfully()
     {
         var model = new TestModel { StringArray = null };
-        var rootComponent = new TestInputHostComponent<string[]?, TestInputSelect<string[]?>>
+        var rootComponent = new TestInputHostComponent<string[], TestInputSelect<string[]>>
         {
             EditContext = new EditContext(model),
             ValueExpression = () => model.StringArray,
@@ -252,7 +250,7 @@ public class InputSelectTest
     public async Task InputSelectMultiple_EditForm_DeselectingAll_DoesNotThrow()
     {
         var model = new TestModel { StringArray = new[] { "alpha", "beta" } };
-        var rootComponent = new TestInputHostComponent<string[]?, TestInputSelect<string[]?>>
+        var rootComponent = new TestInputHostComponent<string[], TestInputSelect<string[]>>
         {
             EditContext = new EditContext(model),
             ValueExpression = () => model.StringArray,
@@ -265,14 +263,14 @@ public class InputSelectTest
 
         Assert.Null(exception);
         Assert.NotNull(component.CurrentValue);
-        Assert.Empty(component.CurrentValue!);
+        Assert.Empty(component.CurrentValue);
     }
 
     [Fact]
     public async Task InputSelectMultiple_EditForm_NullValue_DeselectingAll_DoesNotThrow()
     {
         var model = new TestModel { StringArray = null };
-        var rootComponent = new TestInputHostComponent<string[]?, TestInputSelect<string[]?>>
+        var rootComponent = new TestInputHostComponent<string[], TestInputSelect<string[]>>
         {
             EditContext = new EditContext(model),
             ValueExpression = () => model.StringArray,
@@ -285,7 +283,7 @@ public class InputSelectTest
 
         Assert.Null(exception);
         Assert.NotNull(component.CurrentValue);
-        Assert.Empty(component.CurrentValue!);
+        Assert.Empty(component.CurrentValue);
     }
 
     [Fact]
@@ -325,24 +323,24 @@ public class InputSelectTest
     {
         public TestEnum NotNullableEnum { get; set; }
 
-        public TestEnum? NullableEnum { get; set; }
+        public TestEnum NullableEnum { get; set; }
 
         public Guid NotNullableGuid { get; set; }
 
-        public Guid? NullableGuid { get; set; }
+        public Guid NullableGuid { get; set; }
 
         public int NotNullableInt { get; set; }
 
-        public int? NullableInt { get; set; }
+        public int NullableInt { get; set; }
 
-        public string[]? StringArray { get; set; }
+        public string[] StringArray { get; set; }
     }
 
     class TestInputSelect<TValue> : InputSelect<TValue>
     {
-        public new TValue? CurrentValue => base.CurrentValue;
+        public new TValue CurrentValue => base.CurrentValue;
 
-        public new string? CurrentValueAsString
+        public new string CurrentValueAsString
         {
             get => base.CurrentValueAsString;
             set => base.CurrentValueAsString = value;
