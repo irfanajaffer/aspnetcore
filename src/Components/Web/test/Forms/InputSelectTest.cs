@@ -323,15 +323,15 @@ public class InputSelectTest
     {
         public TestEnum NotNullableEnum { get; set; }
 
-        public TestEnum NullableEnum { get; set; }
+        public TestEnum? NullableEnum { get; set; }
 
         public Guid NotNullableGuid { get; set; }
 
-        public Guid NullableGuid { get; set; }
+        public Guid? NullableGuid { get; set; }
 
         public int NotNullableInt { get; set; }
 
-        public int NullableInt { get; set; }
+        public int? NullableInt { get; set; }
 
         public string[] StringArray { get; set; }
     }
