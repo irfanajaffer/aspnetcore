@@ -369,490 +369,315 @@ public class BindConverterTest
         Assert.Null(actual);
     }
 
-    [Fact]
-    public void TryConvertTo_UInt_InvalidStringReturnsFalse()
+    // The TryConvertTo overloads for unsigned integer types (uint, ushort, ulong, byte) all share
+    // the same conversion path. These theories cover each scenario across all of those types so
+    // the reader can see at a glance which types are exercised, and a regression in any one type
+    // is caught by the same shared row. The 'typeKey' column identifies the destination type and
+    // the test dispatches via a switch expression to call the strongly-typed generic overload.
+    [Theory]
+    [InlineData("uint", "42", 42u)]
+    [InlineData("ushort", "42", (ushort)42)]
+    [InlineData("ulong", "42", 42ul)]
+    [InlineData("byte", "42", (byte)42)]
+    public void TryConvertTo_UnsignedInteger_ValidValue(string typeKey, string incomingValue, object expected)
     {
-        var successfullyConverted = BindConverter.TryConvertTo<uint>("not a number", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(uint), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableUInt_InvalidStringReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<uint?>("not a number", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Null(actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_UInt_ValidValue()
-    {
-        var incomingValue = "42";
-        var expected = 42u;
-
-        var successfullyConverted = BindConverter.TryConvertTo<uint>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_UInt_NegativeValueReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<uint>("-42", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(uint), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_UInt_ZeroValue()
-    {
-        var incomingValue = "0";
-        var expected = 0u;
-
-        var successfullyConverted = BindConverter.TryConvertTo<uint>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_UInt_MaxValue()
-    {
-        var incomingValue = uint.MaxValue.ToString(CultureInfo.InvariantCulture);
-        var expected = uint.MaxValue;
-
-        var successfullyConverted = BindConverter.TryConvertTo<uint>(incomingValue, CultureInfo.CurrentCulture, out var actual);
+        var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: false, out var actual);
 
         Assert.True(successfullyConverted);
         Assert.Equal(expected, actual);
     }
 
     [Theory]
-    [InlineData("")]
-    [InlineData(null)]
-    public void TryConvertTo_UInt_EmptyOrNullReturnsFalse(string incomingValue)
+    [InlineData("uint", "-42")]
+    [InlineData("ushort", "-42")]
+    [InlineData("ulong", "-42")]
+    [InlineData("byte", "-42")]
+    public void TryConvertTo_UnsignedInteger_NegativeValueReturnsFalse(string typeKey, string incomingValue)
     {
-        var successfullyConverted = BindConverter.TryConvertTo<uint>(incomingValue, CultureInfo.CurrentCulture, out var actual);
+        var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: false, out var actual);
 
         Assert.False(successfullyConverted);
-        Assert.Equal(default(uint), actual);
+        // 'actual' is boxed to object; promote to decimal so every unsigned integer type (including
+        // ulong, which doesn't fit in long) can be compared uniformly against zero.
+        Assert.Equal(0m, Convert.ToDecimal(actual, CultureInfo.InvariantCulture));
     }
 
-    [Fact]
-    public void TryConvertTo_UInt_OverflowReturnsFalse()
+    [Theory]
+    [InlineData("uint", "0", 0u)]
+    [InlineData("ushort", "0", (ushort)0)]
+    [InlineData("ulong", "0", 0ul)]
+    [InlineData("byte", "0", (byte)0)]
+    public void TryConvertTo_UnsignedInteger_ZeroValue(string typeKey, string incomingValue, object expected)
     {
-        var incomingValue = "4294967296"; // uint.MaxValue + 1
-
-        var successfullyConverted = BindConverter.TryConvertTo<uint>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(uint), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableUInt_ValidValue()
-    {
-        var incomingValue = "42";
-        var expected = 42u;
-
-        var successfullyConverted = BindConverter.TryConvertTo<uint?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
+        var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: false, out var actual);
 
         Assert.True(successfullyConverted);
         Assert.Equal(expected, actual);
     }
 
-    [Fact]
-    public void TryConvertTo_NullableUInt_NegativeValueReturnsFalse()
+    [Theory]
+    [InlineData("uint")]
+    [InlineData("ushort")]
+    [InlineData("ulong")]
+    [InlineData("byte")]
+    public void TryConvertTo_UnsignedInteger_MaxValue(string typeKey)
     {
-        var successfullyConverted = BindConverter.TryConvertTo<uint?>("-42", CultureInfo.CurrentCulture, out var actual);
+        var (incomingValue, expected) = typeKey switch
+        {
+            "uint" => (uint.MaxValue.ToString(CultureInfo.InvariantCulture), (object)uint.MaxValue),
+            "ushort" => (ushort.MaxValue.ToString(CultureInfo.InvariantCulture), (object)ushort.MaxValue),
+            "ulong" => (ulong.MaxValue.ToString(CultureInfo.InvariantCulture), (object)ulong.MaxValue),
+            "byte" => (byte.MaxValue.ToString(CultureInfo.InvariantCulture), (object)byte.MaxValue),
+            _ => throw new ArgumentException($"Unsupported type key '{typeKey}'", nameof(typeKey)),
+        };
+
+        var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: false, out var actual);
+
+        Assert.True(successfullyConverted);
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
+    [InlineData("uint", "4294967296")] // uint.MaxValue + 1
+    [InlineData("ushort", "65536")] // ushort.MaxValue + 1
+    [InlineData("ulong", "18446744073709551616")] // ulong.MaxValue + 1
+    [InlineData("byte", "256")] // byte.MaxValue + 1
+    public void TryConvertTo_UnsignedInteger_OverflowReturnsFalse(string typeKey, string incomingValue)
+    {
+        var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: false, out var actual);
+
+        Assert.False(successfullyConverted);
+        // 'actual' is boxed to object; promote to decimal so every unsigned integer type can be
+        // compared uniformly against zero.
+        Assert.Equal(0m, Convert.ToDecimal(actual, CultureInfo.InvariantCulture));
+    }
+
+    [Theory]
+    [InlineData("uint", "")]
+    [InlineData("ushort", "")]
+    [InlineData("ulong", "")]
+    [InlineData("byte", "")]
+    public void TryConvertTo_UnsignedInteger_EmptyOrNullReturnsFalse(string typeKey, string incomingValue)
+    {
+        var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: false, out var actual);
+
+        Assert.False(successfullyConverted);
+        // 'actual' is boxed to object; promote to decimal so every unsigned integer type can be
+        // compared uniformly against zero.
+        Assert.Equal(0m, Convert.ToDecimal(actual, CultureInfo.InvariantCulture));
+    }
+
+    [Theory]
+    [InlineData("uint")]
+    [InlineData("ushort")]
+    [InlineData("ulong")]
+    [InlineData("byte")]
+    public void TryConvertTo_UnsignedInteger_InvalidStringReturnsFalse(string typeKey)
+    {
+        var successfullyConverted = TryConvertUnsigned(typeKey, "not a number", isNullable: false, out var actual);
+
+        Assert.False(successfullyConverted);
+        // 'actual' is boxed to object; promote to decimal so every unsigned integer type can be
+        // compared uniformly against zero.
+        Assert.Equal(0m, Convert.ToDecimal(actual, CultureInfo.InvariantCulture));
+    }
+
+    // Same matrix as above, but for the Nullable<T> variants of the unsigned types. On failure the
+    // out parameter is null (not default(T)), so the assertions differ from the non-nullable case.
+    [Theory]
+    [InlineData("uint", "42", 42u)]
+    [InlineData("ushort", "42", (ushort)42)]
+    [InlineData("ulong", "42", 42ul)]
+    [InlineData("byte", "42", (byte)42)]
+    public void TryConvertTo_NullableUnsignedInteger_ValidValue(string typeKey, string incomingValue, object expected)
+    {
+        var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: true, out var actual);
+
+        Assert.True(successfullyConverted);
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
+    [InlineData("uint", "-42")]
+    [InlineData("ushort", "-42")]
+    [InlineData("ulong", "-42")]
+    [InlineData("byte", "-42")]
+    public void TryConvertTo_NullableUnsignedInteger_NegativeValueReturnsFalse(string typeKey, string incomingValue)
+    {
+        var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: true, out var actual);
 
         Assert.False(successfullyConverted);
         Assert.Null(actual);
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    public void TryConvertTo_NullableUInt_ValidEmptyOrNull(string incomingValue)
+    [InlineData("uint", null)]
+    [InlineData("uint", "")]
+    [InlineData("ushort", null)]
+    [InlineData("ushort", "")]
+    [InlineData("ulong", null)]
+    [InlineData("ulong", "")]
+    [InlineData("byte", null)]
+    [InlineData("byte", "")]
+    public void TryConvertTo_NullableUnsignedInteger_ValidEmptyOrNull(string typeKey, string incomingValue)
     {
-        var successfullyConverted = BindConverter.TryConvertTo<uint?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
+        var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: true, out var actual);
 
         Assert.True(successfullyConverted);
         Assert.Null(actual);
     }
 
-    [Fact]
-    public void TryConvertTo_NullableUInt_OverflowReturnsFalse()
+    [Theory]
+    [InlineData("uint", "4294967296")]
+    [InlineData("ushort", "65536")]
+    [InlineData("ulong", "18446744073709551616")]
+    [InlineData("byte", "256")]
+    public void TryConvertTo_NullableUnsignedInteger_OverflowReturnsFalse(string typeKey, string incomingValue)
     {
-        var incomingValue = "4294967296"; // uint.MaxValue + 1
-
-        var successfullyConverted = BindConverter.TryConvertTo<uint?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Null(actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_UShort_ValidValue()
-    {
-        var incomingValue = "42";
-        var expected = (ushort)42;
-
-        var successfullyConverted = BindConverter.TryConvertTo<ushort>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_UShort_NegativeValueReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<ushort>("-42", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(ushort), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_UShort_MaxValue()
-    {
-        var incomingValue = ushort.MaxValue.ToString(CultureInfo.InvariantCulture);
-        var expected = ushort.MaxValue;
-
-        var successfullyConverted = BindConverter.TryConvertTo<ushort>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_UShort_OverflowReturnsFalse()
-    {
-        var incomingValue = "65536"; // ushort.MaxValue + 1
-
-        var successfullyConverted = BindConverter.TryConvertTo<ushort>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(ushort), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_UShort_InvalidStringReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<ushort>("not a number", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(ushort), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableUShort_ValidValue()
-    {
-        var incomingValue = "42";
-        var expected = (ushort)42;
-
-        var successfullyConverted = BindConverter.TryConvertTo<ushort?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableUShort_NegativeValueReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<ushort?>("-42", CultureInfo.CurrentCulture, out var actual);
+        var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: true, out var actual);
 
         Assert.False(successfullyConverted);
         Assert.Null(actual);
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    public void TryConvertTo_NullableUShort_ValidEmptyOrNull(string incomingValue)
+    [InlineData("uint")]
+    [InlineData("ushort")]
+    [InlineData("ulong")]
+    [InlineData("byte")]
+    public void TryConvertTo_NullableUnsignedInteger_InvalidStringReturnsFalse(string typeKey)
     {
-        var successfullyConverted = BindConverter.TryConvertTo<ushort?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Null(actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableUShort_InvalidStringReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<ushort?>("not a number", CultureInfo.CurrentCulture, out var actual);
+        var successfullyConverted = TryConvertUnsigned(typeKey, "not a number", isNullable: true, out var actual);
 
         Assert.False(successfullyConverted);
         Assert.Null(actual);
     }
 
-    [Fact]
-    public void TryConvertTo_ULong_ValidValue()
+    // Dispatcher: routes the shared test matrix above to the appropriate BindConverter.TryConvertTo<T>
+    // overload. Each branch calls the strongly-typed TryConvertTo<T> overload and boxes the resulting
+    // value into 'actual' (or null on failure for the nullable variant). The helper returns true iff
+    // the conversion succeeded.
+    private static bool TryConvertUnsigned(string typeKey, string incomingValue, bool isNullable, out object actual)
     {
-        var incomingValue = "42";
-        var expected = 42ul;
-
-        var successfullyConverted = BindConverter.TryConvertTo<ulong>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_ULong_NegativeValueReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<ulong>("-42", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(ulong), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_ULong_MaxValue()
-    {
-        var incomingValue = ulong.MaxValue.ToString(CultureInfo.InvariantCulture);
-        var expected = ulong.MaxValue;
-
-        var successfullyConverted = BindConverter.TryConvertTo<ulong>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_ULong_InvalidStringReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<ulong>("not a number", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(ulong), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableULong_ValidValue()
-    {
-        var incomingValue = "42";
-        var expected = 42ul;
-
-        var successfullyConverted = BindConverter.TryConvertTo<ulong?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableULong_NegativeValueReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<ulong?>("-42", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Null(actual);
+        switch (typeKey)
+        {
+            case "uint":
+                {
+                    if (isNullable)
+                    {
+                        if (BindConverter.TryConvertTo<uint?>(incomingValue, CultureInfo.CurrentCulture, out var n))
+                        {
+                            // For null/empty input the parser succeeds with a null T?; surface that
+                            // as actual == null so the test asserts against a true null reference.
+                            actual = n.HasValue ? (object)n.Value : null;
+                            return true;
+                        }
+                        actual = null;
+                        return false;
+                    }
+                    if (BindConverter.TryConvertTo<uint>(incomingValue, CultureInfo.CurrentCulture, out var v))
+                    {
+                        actual = v;
+                        return true;
+                    }
+                    actual = 0;
+                    return false;
+                }
+            case "ushort":
+                {
+                    if (isNullable)
+                    {
+                        if (BindConverter.TryConvertTo<ushort?>(incomingValue, CultureInfo.CurrentCulture, out var n))
+                        {
+                            actual = n.HasValue ? (object)n.Value : null;
+                            return true;
+                        }
+                        actual = null;
+                        return false;
+                    }
+                    if (BindConverter.TryConvertTo<ushort>(incomingValue, CultureInfo.CurrentCulture, out var v))
+                    {
+                        actual = v;
+                        return true;
+                    }
+                    actual = (ushort)0;
+                    return false;
+                }
+            case "ulong":
+                {
+                    if (isNullable)
+                    {
+                        if (BindConverter.TryConvertTo<ulong?>(incomingValue, CultureInfo.CurrentCulture, out var n))
+                        {
+                            actual = n.HasValue ? (object)n.Value : null;
+                            return true;
+                        }
+                        actual = null;
+                        return false;
+                    }
+                    if (BindConverter.TryConvertTo<ulong>(incomingValue, CultureInfo.CurrentCulture, out var v))
+                    {
+                        actual = v;
+                        return true;
+                    }
+                    actual = 0ul;
+                    return false;
+                }
+            case "byte":
+                {
+                    if (isNullable)
+                    {
+                        if (BindConverter.TryConvertTo<byte?>(incomingValue, CultureInfo.CurrentCulture, out var n))
+                        {
+                            actual = n.HasValue ? (object)n.Value : null;
+                            return true;
+                        }
+                        actual = null;
+                        return false;
+                    }
+                    if (BindConverter.TryConvertTo<byte>(incomingValue, CultureInfo.CurrentCulture, out var v))
+                    {
+                        actual = v;
+                        return true;
+                    }
+                    actual = (byte)0;
+                    return false;
+                }
+            default:
+                throw new ArgumentException($"Unsupported type key '{typeKey}'", nameof(typeKey));
+        }
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    public void TryConvertTo_NullableULong_ValidEmptyOrNull(string incomingValue)
+    [InlineData("42", (sbyte)42)]
+    [InlineData("-42", (sbyte)-42)]
+    [InlineData("127", sbyte.MaxValue)] // sbyte.MaxValue
+    [InlineData("-128", sbyte.MinValue)] // sbyte.MinValue
+    public void TryConvertTo_SByte_ValidValue(string incomingValue, sbyte expected)
     {
-        var successfullyConverted = BindConverter.TryConvertTo<ulong?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Null(actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableULong_InvalidStringReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<ulong?>("not a number", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Null(actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_Byte_ValidValue()
-    {
-        var incomingValue = "42";
-        var expected = (byte)42;
-
-        var successfullyConverted = BindConverter.TryConvertTo<byte>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_Byte_NegativeValueReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<byte>("-42", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(byte), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_Byte_MaxValue()
-    {
-        var incomingValue = byte.MaxValue.ToString(CultureInfo.InvariantCulture);
-        var expected = byte.MaxValue;
-
-        var successfullyConverted = BindConverter.TryConvertTo<byte>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_Byte_OverflowReturnsFalse()
-    {
-        var incomingValue = "256"; // byte.MaxValue + 1
-
-        var successfullyConverted = BindConverter.TryConvertTo<byte>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(byte), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_Byte_InvalidStringReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<byte>("not a number", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(byte), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableByte_ValidValue()
-    {
-        var incomingValue = "42";
-        var expected = (byte)42;
-
-        var successfullyConverted = BindConverter.TryConvertTo<byte?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableByte_NegativeValueReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<byte?>("-42", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Null(actual);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    public void TryConvertTo_NullableByte_ValidEmptyOrNull(string incomingValue)
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<byte?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Null(actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableByte_InvalidStringReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<byte?>("not a number", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Null(actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_SByte_ValidPositiveValue()
-    {
-        var incomingValue = "42";
-        var expected = (sbyte)42;
-
         var successfullyConverted = BindConverter.TryConvertTo<sbyte>(incomingValue, CultureInfo.CurrentCulture, out var actual);
 
         Assert.True(successfullyConverted);
         Assert.Equal(expected, actual);
     }
 
-    [Fact]
-    public void TryConvertTo_SByte_ValidNegativeValue()
+    [Theory]
+    [InlineData("128")] // sbyte.MaxValue + 1
+    [InlineData("-129")] // sbyte.MinValue - 1
+    [InlineData("not a number")]
+    public void TryConvertTo_SByte_InvalidValueReturnsFalse(string incomingValue)
     {
-        var incomingValue = "-42";
-        var expected = (sbyte)-42;
-
-        var successfullyConverted = BindConverter.TryConvertTo<sbyte>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_SByte_MaxValue()
-    {
-        var incomingValue = sbyte.MaxValue.ToString(CultureInfo.InvariantCulture);
-        var expected = sbyte.MaxValue;
-
-        var successfullyConverted = BindConverter.TryConvertTo<sbyte>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_SByte_MinValue()
-    {
-        var incomingValue = sbyte.MinValue.ToString(CultureInfo.InvariantCulture);
-        var expected = sbyte.MinValue;
-
-        var successfullyConverted = BindConverter.TryConvertTo<sbyte>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.True(successfullyConverted);
-        Assert.Equal(expected, actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_SByte_OverflowPositiveReturnsFalse()
-    {
-        var incomingValue = "128"; // sbyte.MaxValue + 1
-
         var successfullyConverted = BindConverter.TryConvertTo<sbyte>(incomingValue, CultureInfo.CurrentCulture, out var actual);
 
         Assert.False(successfullyConverted);
         Assert.Equal(default(sbyte), actual);
     }
 
-    [Fact]
-    public void TryConvertTo_SByte_OverflowNegativeReturnsFalse()
+    [Theory]
+    [InlineData("-42", (sbyte)-42)]
+    [InlineData("42", (sbyte)42)]
+    public void TryConvertTo_NullableSByte_ValidValue(string incomingValue, sbyte expected)
     {
-        var incomingValue = "-129"; // sbyte.MinValue - 1
-
-        var successfullyConverted = BindConverter.TryConvertTo<sbyte>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(sbyte), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_SByte_InvalidStringReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<sbyte>("not a number", CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Equal(default(sbyte), actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableSByte_ValidValue()
-    {
-        var incomingValue = "-42";
-        var expected = (sbyte)-42;
-
         var successfullyConverted = BindConverter.TryConvertTo<sbyte?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
 
         Assert.True(successfullyConverted);
@@ -870,21 +695,13 @@ public class BindConverterTest
         Assert.Null(actual);
     }
 
-    [Fact]
-    public void TryConvertTo_NullableSByte_OverflowReturnsFalse()
+    [Theory]
+    [InlineData("128")] // sbyte.MaxValue + 1
+    [InlineData("-129")] // sbyte.MinValue - 1
+    [InlineData("not a number")]
+    public void TryConvertTo_NullableSByte_InvalidValueReturnsFalse(string incomingValue)
     {
-        var incomingValue = "128"; // sbyte.MaxValue + 1
-
         var successfullyConverted = BindConverter.TryConvertTo<sbyte?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
-
-        Assert.False(successfullyConverted);
-        Assert.Null(actual);
-    }
-
-    [Fact]
-    public void TryConvertTo_NullableSByte_InvalidStringReturnsFalse()
-    {
-        var successfullyConverted = BindConverter.TryConvertTo<sbyte?>("not a number", CultureInfo.CurrentCulture, out var actual);
 
         Assert.False(successfullyConverted);
         Assert.Null(actual);

@@ -2073,10 +2073,8 @@ public static class BindConverter
                 // We intentionally close-over the TypeConverter to cache it. The TypeDescriptor infrastructure is slow.
                 if (obj == null)
                 {
-                    var targetType = typeof(T);
-                    var isNullableOrReference = !targetType.IsValueType || Nullable.GetUnderlyingType(targetType) != null;
                     value = default!;
-                    return isNullableOrReference;
+                    return true;
                 }
 
                 try
