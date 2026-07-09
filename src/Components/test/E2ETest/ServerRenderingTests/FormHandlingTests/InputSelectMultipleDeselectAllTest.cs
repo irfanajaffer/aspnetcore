@@ -45,22 +45,17 @@ public class InputSelectMultipleDeselectAllTest : ServerTestBase<BasicTestAppSer
         Browser.True(() => citiesSelect.IsMultiple);
         Browser.Equal(4, () => citiesSelect.Options.Count);
 
-        // Drive the browser into the starting state for the issue scenario: a
-        // multi-select with two options selected. Note: in static SSR the bound
-        // value is not pre-applied to the <option> elements' `selected`
-        // attribute (InputSelect only emits a single `value` attribute on the
-        // <select>, which doesn't preselect for multi-select), so we drive the
-        // initial selection through the DOM like a user would.
+        // In static SSR, InputSelect emits a single `value` attribute on the
+        // <select> which doesn't preselect <option> elements, so the initial
+        // selection must be driven through the DOM.
         citiesSelect.SelectByText("San Francisco");
         citiesSelect.SelectByText("Tokyo");
         Browser.Equal(2, () => citiesSelect.AllSelectedOptions.Count);
 
-        // Deselect all options and submit. In SSR this produces a POST whose
-        // form data contains no entry for the multi-select, so
+        // In SSR the resulting POST has no entry for the multi-select, so
         // [SupplyParameterFromForm] must resolve SelectedCities to an empty
-        // array, not null. If it resolves to null, re-rendering the page would
-        // NRE on SelectedCities.Length (or fall back to -1 via the
-        // `?? -1` in the markup).
+        // array. If it resolves to null, re-rendering would NRE on
+        // SelectedCities.Length (or fall back to -1 via the `?? -1` in markup).
         citiesSelect.DeselectByText("San Francisco");
         citiesSelect.DeselectByText("Tokyo");
         Browser.Equal(0, () => citiesSelect.AllSelectedOptions.Count);

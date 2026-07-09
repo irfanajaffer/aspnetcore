@@ -289,8 +289,7 @@
             // to observe the asynchrony too.
             await Task.Delay(500);
             customValidationMessageStore.Add(editContext.Field(nameof(Person.Username)), "This is invalid, asynchronously");
-                editContext.NotifyValidationStateChanged();
-
+            _ = InvokeAsync(editContext.NotifyValidationStateChanged);
         });
     }
 

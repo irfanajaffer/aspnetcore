@@ -110,10 +110,11 @@ public readonly struct FieldIdentifier : IEquatable<FieldIdentifier>
     {
         var accessorBody = accessor.Body;
 
-        // Unwrap casts
-         if (accessorBody is UnaryExpression unaryExpression
+        // Unwrap casts to object
+        if (accessorBody is UnaryExpression unaryExpression
             && unaryExpression.NodeType == ExpressionType.Convert
-            && unaryExpression.Type == typeof(object))   {
+            && unaryExpression.Type == typeof(object))
+        {
             accessorBody = unaryExpression.Operand;
         }
 
