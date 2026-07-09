@@ -697,6 +697,63 @@ public class BindConverterTest
         Assert.Null(actual);
     }
 
+    [Theory]
+    [InlineData("A", 'A')]
+    [InlineData("z", 'z')]
+    [InlineData("0", '0')]
+    public void TryConvertTo_Char_ValidValue(string incomingValue, char expected)
+    {
+        var successfullyConverted = BindConverter.TryConvertTo<char>(incomingValue, CultureInfo.CurrentCulture, out var actual);
+
+        Assert.True(successfullyConverted);
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
+    [InlineData("AB")]
+    [InlineData("not a character")]
+    public void TryConvertTo_Char_InvalidValueReturnsFalse(string incomingValue)
+    {
+        var successfullyConverted = BindConverter.TryConvertTo<char>(incomingValue, CultureInfo.CurrentCulture, out var actual);
+
+        Assert.False(successfullyConverted);
+        Assert.Equal(default(char), actual);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void TryConvertTo_NullableChar_ValidEmptyOrNull(string incomingValue)
+    {
+        var successfullyConverted = BindConverter.TryConvertTo<char?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
+
+        Assert.True(successfullyConverted);
+        Assert.Null(actual);
+    }
+
+    [Theory]
+    [InlineData("AB")]
+    [InlineData("not a character")]
+    public void TryConvertTo_NullableChar_InvalidValueReturnsFalse(string incomingValue)
+    {
+        var successfullyConverted = BindConverter.TryConvertTo<char?>(incomingValue, CultureInfo.CurrentCulture, out var actual);
+
+        Assert.False(successfullyConverted);
+        Assert.Null(actual);
+    }
+
+    // The fix for issue 1031580 catches exceptions from TypeConverter.ConvertFrom. Verify that
+    // path by registering a TypeConverter that throws a non-JsonException type: a bug that only
+    // catches JsonException (or vice versa) would let this case throw out of TryConvertTo.
+    [Fact]
+    public void TryConvertTo_TypeConverter_ConverterThrowsIsCaught()
+    {
+        var successfullyConverted = BindConverter.TryConvertTo<ThrowingType>("any input", CultureInfo.CurrentCulture, out var actual);
+
+        Assert.False(successfullyConverted);
+        Assert.Equal(default(ThrowingType), actual);
+    }
+
     private enum SomeLetters
     {
         A,
@@ -711,6 +768,11 @@ public class BindConverterTest
         public string Name { get; set; }
 
         public int Age { get; set; }
+    }
+
+    [TypeConverter(typeof(ThrowingConverter))]
+    private struct ThrowingType
+    {
     }
 
     private class PersonConverter : TypeConverter
@@ -753,6 +815,21 @@ public class BindConverterTest
             }
 
             return base.ConvertTo(context, culture, value, destinationType);
+        }
+    }
+
+    private sealed class ThrowingConverter : TypeConverter
+    {
+        public override bool CanConvertFrom(ITypeDescriptorContext context, Type sourceType)
+        {
+            return sourceType == typeof(string);
+        }
+
+        public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
+        {
+            // Use FormatException (not JsonException) to prove the catch block matches the full
+            // exception filter and is not specific to one exception type.
+            throw new FormatException($"ThrowingConverter cannot convert '{value}'.");
         }
     }
 }
