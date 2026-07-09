@@ -369,11 +369,6 @@ public class BindConverterTest
         Assert.Null(actual);
     }
 
-    // The TryConvertTo overloads for unsigned integer types (uint, ushort, ulong, byte) all share
-    // the same conversion path. These theories cover each scenario across all of those types so
-    // the reader can see at a glance which types are exercised, and a regression in any one type
-    // is caught by the same shared row. The 'typeKey' column identifies the destination type and
-    // the test dispatches via a switch expression to call the strongly-typed generic overload.
     [Theory]
     [InlineData("uint", "42", 42u)]
     [InlineData("ushort", "42", (ushort)42)]
@@ -397,8 +392,6 @@ public class BindConverterTest
         var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: false, out var actual);
 
         Assert.False(successfullyConverted);
-        // 'actual' is boxed to object; promote to decimal so every unsigned integer type (including
-        // ulong, which doesn't fit in long) can be compared uniformly against zero.
         Assert.Equal(0m, Convert.ToDecimal(actual, CultureInfo.InvariantCulture));
     }
 
@@ -447,8 +440,6 @@ public class BindConverterTest
         var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: false, out var actual);
 
         Assert.False(successfullyConverted);
-        // 'actual' is boxed to object; promote to decimal so every unsigned integer type can be
-        // compared uniformly against zero.
         Assert.Equal(0m, Convert.ToDecimal(actual, CultureInfo.InvariantCulture));
     }
 
@@ -462,8 +453,6 @@ public class BindConverterTest
         var successfullyConverted = TryConvertUnsigned(typeKey, incomingValue, isNullable: false, out var actual);
 
         Assert.False(successfullyConverted);
-        // 'actual' is boxed to object; promote to decimal so every unsigned integer type can be
-        // compared uniformly against zero.
         Assert.Equal(0m, Convert.ToDecimal(actual, CultureInfo.InvariantCulture));
     }
 
@@ -482,8 +471,6 @@ public class BindConverterTest
         Assert.Equal(0m, Convert.ToDecimal(actual, CultureInfo.InvariantCulture));
     }
 
-    // Same matrix as above, but for the Nullable<T> variants of the unsigned types. On failure the
-    // out parameter is null (not default(T)), so the assertions differ from the non-nullable case.
     [Theory]
     [InlineData("uint", "42", 42u)]
     [InlineData("ushort", "42", (ushort)42)]
@@ -553,10 +540,6 @@ public class BindConverterTest
         Assert.Null(actual);
     }
 
-    // Dispatcher: routes the shared test matrix above to the appropriate BindConverter.TryConvertTo<T>
-    // overload. Each branch calls the strongly-typed TryConvertTo<T> overload and boxes the resulting
-    // value into 'actual' (or null on failure for the nullable variant). The helper returns true iff
-    // the conversion succeeded.
     private static bool TryConvertUnsigned(string typeKey, string incomingValue, bool isNullable, out object actual)
     {
         switch (typeKey)
@@ -567,8 +550,6 @@ public class BindConverterTest
                     {
                         if (BindConverter.TryConvertTo<uint?>(incomingValue, CultureInfo.CurrentCulture, out var n))
                         {
-                            // For null/empty input the parser succeeds with a null T?; surface that
-                            // as actual == null so the test asserts against a true null reference.
                             actual = n.HasValue ? (object)n.Value : null;
                             return true;
                         }
