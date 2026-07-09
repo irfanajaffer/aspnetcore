@@ -190,14 +190,14 @@
     class Person
     {
         [Required(ErrorMessage = "Enter a name"), StringLength(10, ErrorMessage = "That name is too long")]
-        public string Name { get; set; } = null;
+        public string Name { get; set; }
 
         [EmailAddress(ErrorMessage = "That doesn't look like a real email address")]
         [StringLength(10, ErrorMessage = "We only accept very short email addresses (max 10 chars)")]
-        public string Email { get; set; } = null;
+        public string Email { get; set; }
 
         [Compare(nameof(Email), ErrorMessage = "Email and confirm email do not match.")]
-        public string ConfirmEmail { get; set; } = null;
+        public string ConfirmEmail { get; set; }
 
         [Range(0, 200, ErrorMessage = "Nobody is that old")]
         public int AgeInYears { get; set; }
@@ -221,7 +221,7 @@
         public bool IsEvil { get; set; } = true;
 
         [Required, StringLength(20, ErrorMessage = "Description is max 20 chars")]
-        public string Description { get; set; } = null;
+        public string Description { get; set; }
 
         [Required, EnumDataType(typeof(TicketClass))]
         public TicketClass TicketClass { get; set; }
@@ -243,7 +243,7 @@
         public bool IsRadioMathStatementTrue { get; set; } = false;
 
         [Required, StringLength(10), CustomValidationClassName(Valid = "valid-socks", Invalid = "invalid-socks")]
-        public string SocksColor { get; set; } = null;
+        public string SocksColor { get; set; }
 
         [Required, MinLength(2), MaxLength(3)]
         public City[] SelectedCities { get; set; } = new[] { City.SanFrancisco };
@@ -255,7 +255,7 @@
 
         public City[] SelectedCitiesNullable { get; set; } = null;
 
-        public string Username { get; set; } = null;
+        public string Username { get; set; }
     }
 
     enum TicketClass { Economy, Premium, First }
@@ -288,11 +288,9 @@
             // so long that we time out. Picking a value that's long enough for humans
             // to observe the asynchrony too.
             await Task.Delay(500);
-            await InvokeAsync(() =>
-            {
-                customValidationMessageStore.Add(editContext.Field(nameof(Person.Username)), "This is invalid, asynchronously");
+            customValidationMessageStore.Add(editContext.Field(nameof(Person.Username)), "This is invalid, asynchronously");
                 editContext.NotifyValidationStateChanged();
-            });
+
         });
     }
 
