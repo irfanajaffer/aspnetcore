@@ -22,3 +22,7 @@ Microsoft.AspNetCore.Components.ConfigureBrowser.HttpContext.set -> void
 Microsoft.AspNetCore.Http.BrowserConfigurationHttpContextExtensions
 static Microsoft.AspNetCore.Http.BrowserConfigurationHttpContextExtensions.GetBrowserConfiguration(this Microsoft.AspNetCore.Http.HttpContext! context) -> Microsoft.AspNetCore.Components.BrowserConfiguration!
 static Microsoft.AspNetCore.Builder.RazorComponentsEndpointConventionBuilderExtensions.WithBrowserConfiguration(this Microsoft.AspNetCore.Builder.RazorComponentsEndpointConventionBuilder! builder, System.Action<Microsoft.AspNetCore.Components.BrowserConfiguration!>! configure) -> Microsoft.AspNetCore.Builder.RazorComponentsEndpointConventionBuilder!
+Microsoft.AspNetCore.Components.Endpoints.FormDataSource
+Microsoft.AspNetCore.Components.Endpoints.FormDataSource.None = 0 -> Microsoft.AspNetCore.Components.Endpoints.FormDataSource
+Microsoft.AspNetCore.Components.Endpoints.FormDataSource.FormPost = 1 -> Microsoft.AspNetCore.Components.Endpoints.FormDataSource
+Microsoft.AspNetCore.Components.Endpoints.FormDataSource.FormGet = 2 -> Microsoft.AspNetCore.Components.Endpoints.FormDataSource

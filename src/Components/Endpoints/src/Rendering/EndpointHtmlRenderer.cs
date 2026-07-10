@@ -77,11 +77,21 @@ internal partial class EndpointHtmlRenderer : StaticHtmlRenderer, IComponentPrer
         }
     }
 
-    internal async Task InitializeStandardComponentServicesAsync(
+    internal Task InitializeStandardComponentServicesAsync(
         HttpContext httpContext,
         [DynamicallyAccessedMembers(Component)] Type? componentType = null,
         string? handler = null,
         IFormCollection? form = null)
+    {
+        return InitializeStandardComponentServicesAsync(httpContext, componentType, handler, form, isFormPost: form != null);
+    }
+
+    internal async Task InitializeStandardComponentServicesAsync(
+        HttpContext httpContext,
+        [DynamicallyAccessedMembers(Component)] Type? componentType,
+        string? handler,
+        IFormCollection? form,
+        bool isFormPost)
     {
         var navigationManager = httpContext.RequestServices.GetRequiredService<NavigationManager>();
         ((IHostEnvironmentNavigationManager)navigationManager)?.Initialize(
@@ -115,6 +125,12 @@ internal partial class EndpointHtmlRenderer : StaticHtmlRenderer, IComponentPrer
         {
             httpContext.RequestServices.GetRequiredService<HttpContextFormDataProvider>()
                 .SetFormData(handler, new FormCollectionReadOnlyDictionary(form), form.Files);
+        }
+        else if (handler != null && !isFormPost)
+        {
+            // GET-based form submission: the form data lives in the request's query string.
+            httpContext.RequestServices.GetRequiredService<HttpContextFormDataProvider>()
+                .SetFormDataFromQuery(handler, httpContext.Request.Query);
         }
 
         if (httpContext.RequestServices.GetService<AntiforgeryStateProvider>() is EndpointAntiforgeryStateProvider antiforgery)

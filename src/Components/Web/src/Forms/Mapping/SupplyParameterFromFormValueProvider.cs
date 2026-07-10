@@ -40,7 +40,7 @@ internal class SupplyParameterFromFormValueProvider : ICascadingValueSupplier
         // We also supply values for [SupplyValueFromForm]
         if (_formValueMapper is not null && parameterInfo.Attribute is SupplyParameterFromFormAttribute supplyParameterFromFormAttribute)
         {
-            return _formValueMapper.CanMap(parameterInfo.PropertyType, MappingScopeName, supplyParameterFromFormAttribute.FormName);
+            return _formValueMapper.CanMap(parameterInfo.PropertyType, MappingScopeName, GetFormName(supplyParameterFromFormAttribute));
         }
 
         return false;
@@ -75,7 +75,7 @@ internal class SupplyParameterFromFormValueProvider : ICascadingValueSupplier
 
         var attribute = (SupplyParameterFromFormAttribute)parameterInfo.Attribute; // Must be a valid cast because we check in CanSupplyValue
         var parameterName = attribute.Name ?? parameterInfo.PropertyName;
-        var restrictToFormName = attribute.FormName;
+        var restrictToFormName = GetFormName(attribute);
         Action<string, FormattableString, string?> errorHandler = string.IsNullOrEmpty(restrictToFormName) ?
             mappingContext.AddError :
             (name, message, value) => mappingContext.AddError(restrictToFormName, parameterName, message, value);
@@ -89,5 +89,20 @@ internal class SupplyParameterFromFormValueProvider : ICascadingValueSupplier
         formValueMapper.Map(context);
 
         return context.Result;
+    }
+
+    // Returns the form name to match against. Handler (the new property) takes
+    // precedence; we fall back to FormName for backward compatibility. If both
+    // are supplied this is a configuration error and we throw.
+    internal static string? GetFormName(SupplyParameterFromFormAttribute attribute)
+    {
+        if (!string.IsNullOrEmpty(attribute.Handler) && !string.IsNullOrEmpty(attribute.FormName))
+        {
+            throw new InvalidOperationException(
+                $"{nameof(SupplyParameterFromFormAttribute)} cannot specify both {nameof(attribute.FormName)} and {nameof(attribute.Handler)}. " +
+                $"Use {nameof(attribute.Handler)} when binding to a form that submits via a GET request; otherwise use {nameof(attribute.FormName)}.");
+        }
+
+        return attribute.Handler ?? attribute.FormName;
     }
 }

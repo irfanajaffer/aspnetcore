@@ -113,3 +113,7 @@ Microsoft.AspNetCore.Components.Forms.Label<TValue>.ChildContent.set -> void
 Microsoft.AspNetCore.Components.Forms.Label<TValue>.For.get -> System.Linq.Expressions.Expression<System.Func<TValue>!>?
 Microsoft.AspNetCore.Components.Forms.Label<TValue>.For.set -> void
 Microsoft.AspNetCore.Components.Forms.Label<TValue>.Label() -> void
+Microsoft.AspNetCore.Components.SupplyParameterFromFormAttribute.Handler.get -> string?
+Microsoft.AspNetCore.Components.SupplyParameterFromFormAttribute.Handler.set -> void
+Microsoft.AspNetCore.Components.Forms.EditForm.HttpMethod.get -> string?
+Microsoft.AspNetCore.Components.Forms.EditForm.HttpMethod.set -> void

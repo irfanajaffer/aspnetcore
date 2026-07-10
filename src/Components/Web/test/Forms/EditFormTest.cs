@@ -205,6 +205,119 @@ public class EditFormTest
     }
 
     [Fact]
+    public async Task MethodGet_RendersGetFormAndHiddenHandlerField()
+    {
+        var editContext = new EditContext(new object());
+        var rootComponent = new TestEditFormHostComponent
+        {
+            FormName = "my-get-form",
+            HttpMethod = "get",
+            MappingContextName = "mapping-context-name",
+            EditContext = editContext,
+        };
+
+        await RenderAndGetTestEditFormComponentAsync(rootComponent);
+        var editFormComponentId = _testRenderer.Batches.Single()
+            .GetComponentFrames<EditForm>().Single().ComponentId;
+        var editFormFrames = _testRenderer.GetCurrentRenderTreeFrames(editFormComponentId);
+        var frames = editFormFrames.AsEnumerable().ToList();
+
+        // The form itself should advertise method="get"
+        var methodAttribute = frames.Where(f =>
+            f.FrameType == RenderTreeFrameType.Attribute && f.AttributeName == "method").First();
+        Assert.Equal("get", methodAttribute.AttributeValue);
+
+        var hasInputElement = frames.Any(f =>
+            f.FrameType == RenderTreeFrameType.Element && f.ElementName == "input");
+        Assert.False(hasInputElement);
+
+        var hasNamedEvent = frames.Any(f => f.FrameType == RenderTreeFrameType.NamedEvent);
+        Assert.True(hasNamedEvent);
+    }
+
+    [Fact]
+    public async Task MethodGet_WithoutFormName_Throws()
+    {
+        var editContext = new EditContext(new object());
+        var rootComponent = new TestEditFormHostComponent
+        {
+            HttpMethod = "get",
+            MappingContextName = "mapping-context-name",
+            EditContext = editContext,
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RenderAndGetTestEditFormComponentAsync(rootComponent));
+        Assert.Contains("FormName", ex.Message);
+        Assert.Contains("get", ex.Message);
+    }
+
+    [Fact]
+    public async Task MethodGet_DoesNotRenderAntiforgeryToken()
+    {
+        var editContext = new EditContext(new object());
+        var rootComponent = new TestEditFormHostComponent
+        {
+            FormName = "my-get-form",
+            HttpMethod = "get",
+            MappingContextName = "mapping-context-name",
+            EditContext = editContext,
+        };
+
+        await RenderAndGetTestEditFormComponentAsync(rootComponent);
+        var editFormComponentId = _testRenderer.Batches.Single()
+            .GetComponentFrames<EditForm>().Single().ComponentId;
+        var editFormFrames = _testRenderer.GetCurrentRenderTreeFrames(editFormComponentId);
+
+        var hasAntiforgeryToken = editFormFrames.AsEnumerable()
+            .Where(f => f.FrameType == RenderTreeFrameType.Component)
+            .Any(f => f.Component is AntiforgeryToken);
+        Assert.False(hasAntiforgeryToken);
+    }
+
+    [Fact]
+    public async Task MethodInvalid_Throws()
+    {
+        var editContext = new EditContext(new object());
+        var rootComponent = new TestEditFormHostComponent
+        {
+            FormName = "my-form",
+            HttpMethod = "patch",
+            MappingContextName = "mapping-context-name",
+            EditContext = editContext,
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RenderAndGetTestEditFormComponentAsync(rootComponent));
+        Assert.Contains("HttpMethod", ex.Message);
+    }
+
+    [Fact]
+    public async Task MethodPost_RendersPostForm()
+    {
+        // Backward compatibility: explicit HttpMethod="post" still renders method="post"
+        var editContext = new EditContext(new object());
+        var rootComponent = new TestEditFormHostComponent
+        {
+            FormName = "my-form",
+            HttpMethod = "post",
+            MappingContextName = "mapping-context-name",
+            EditContext = editContext,
+        };
+
+        await RenderAndGetTestEditFormComponentAsync(rootComponent);
+        var editFormComponentId = _testRenderer.Batches.Single()
+            .GetComponentFrames<EditForm>().Single().ComponentId;
+        var editFormFrames = _testRenderer.GetCurrentRenderTreeFrames(editFormComponentId);
+        var editFormAttributes = editFormFrames.AsEnumerable()
+            .SkipWhile(f => f.FrameType != RenderTreeFrameType.Attribute)
+            .TakeWhile(f => f.FrameType == RenderTreeFrameType.Attribute)
+            .ToDictionary(f => f.AttributeName, f => f.AttributeValue);
+
+        Assert.Equal("post", editFormAttributes["method"]);
+    }
+
+    [Fact]
     public async Task Submit_AwaitsAsyncValidationBeforeOnValidSubmit()
     {
         var editContext = new EditContext(new TestModel());
@@ -417,6 +530,8 @@ public class EditFormTest
 
         public string FormName { get; set; }
 
+        public string HttpMethod { get; set; }
+
         public Dictionary<string, object> AdditionalFormAttributes { get; set; }
 
         protected override void BuildRenderTree(RenderTreeBuilder builder)
@@ -447,6 +562,10 @@ public class EditFormTest
                     builder.AddComponentParameter(4, "OnValidSubmit", new EventCallback<EditContext>(null, SubmitHandler));
                 }
                 builder.AddComponentParameter(5, "FormName", FormName);
+                if (HttpMethod != null)
+                {
+                    builder.AddComponentParameter(6, "HttpMethod", HttpMethod);
+                }
 
                 builder.CloseComponent();
             }

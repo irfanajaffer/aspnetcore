@@ -95,6 +95,154 @@ public class RazorComponentEndpointInvokerTest
         Assert.Equal("text/html; charset=utf-8", context.Response.ContentType);
     }
 
+    [Fact]
+    public async Task Invoker_AcceptsGetRequestWithHandlerInQuery()
+    {
+        // Arrange - GET requests with a _handler query parameter are valid form
+        // submissions for GET-based forms. The HttpContextFormDataProvider should
+        // be populated from the request's query string, and the FormDataSource
+        // should be FormGet (not FormPost).
+        var services = new ServiceCollection().AddRazorComponents()
+                        .Services.AddAntiforgery()
+                        .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+                        .AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment())
+                        .BuildServiceProvider();
+
+        var invoker = new RazorComponentEndpointInvoker(
+            new EndpointHtmlRenderer(
+                services,
+                NullLoggerFactory.Instance),
+            NullLogger<RazorComponentEndpointInvoker>.Instance);
+
+        var context = new DefaultHttpContext();
+        context.SetEndpoint(new RouteEndpoint(
+            ctx => Task.CompletedTask,
+            RoutePatternFactory.Parse("/search"),
+            0,
+            new EndpointMetadataCollection(
+                new ComponentTypeMetadata(typeof(SimpleComponent)),
+                new RootComponentMetadata(typeof(SimpleComponent)),
+                new ConfiguredRenderModesMetadata(Array.Empty<IComponentRenderMode>())),
+            "test"));
+        context.Request.Method = "GET";
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("localhost");
+        context.Request.Path = "/search";
+        context.Request.QueryString = new QueryString("?_handler=search&Filter.Query=hello&Filter.Page=2");
+        context.Response.Body = new MemoryStream();
+        context.RequestServices = services;
+
+        // Act
+        await invoker.Render(context);
+
+        // Assert: a 200 OK (the GET handler was accepted, not rejected)
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+
+        // The form data provider should have been populated from the query string
+        var formData = services.GetRequiredService<HttpContextFormDataProvider>();
+        Assert.True(formData.TryGetIncomingHandlerName(out var handler));
+        Assert.Equal("search", handler);
+        Assert.Equal(FormDataSource.FormGet, formData.FormDataSource);
+        Assert.Equal("hello", formData.Entries["Filter.Query"].ToString());
+        Assert.Equal("2", formData.Entries["Filter.Page"].ToString());
+    }
+
+    [Fact]
+    public async Task Invoker_AcceptsPlainGetRequestWithoutHandler()
+    {
+        // A plain GET request (no _handler) should still work as it always did
+        // (treat the request as a non-form submission).
+        var services = new ServiceCollection().AddRazorComponents()
+                        .Services.AddAntiforgery()
+                        .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+                        .AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment())
+                        .BuildServiceProvider();
+
+        var invoker = new RazorComponentEndpointInvoker(
+            new EndpointHtmlRenderer(
+                services,
+                NullLoggerFactory.Instance),
+            NullLogger<RazorComponentEndpointInvoker>.Instance);
+
+        var context = new DefaultHttpContext();
+        context.SetEndpoint(new RouteEndpoint(
+            ctx => Task.CompletedTask,
+            RoutePatternFactory.Parse("/"),
+            0,
+            new EndpointMetadataCollection(
+                new ComponentTypeMetadata(typeof(SimpleComponent)),
+                new RootComponentMetadata(typeof(SimpleComponent)),
+                new ConfiguredRenderModesMetadata(Array.Empty<IComponentRenderMode>())),
+            "test"));
+        context.Request.Method = "GET";
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("localhost");
+        context.Request.Path = "/";
+        context.Response.Body = new MemoryStream();
+        context.RequestServices = services;
+
+        // Act
+        await invoker.Render(context);
+
+        // Assert: a 200 OK
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+
+        // The form data provider should not be populated at all
+        var formData = services.GetRequiredService<HttpContextFormDataProvider>();
+        Assert.False(formData.TryGetIncomingHandlerName(out _));
+        Assert.Equal(FormDataSource.None, formData.FormDataSource);
+    }
+
+    [Fact]
+    public async Task Invoker_AcceptsGetRequestWithMultipleHandlersInQueryAndUsesTheFirst()
+    {
+        // A GET request can contain more than one _handler value if a user
+        // copy-pastes the URL or a server-to-server call duplicates the
+        // parameter. Browsers will only ever emit one for a form, so the
+        // invoker should be tolerant on GET and use the first value rather
+        // than 400-ing the request (POST keeps its strict 400 behaviour).
+        var services = new ServiceCollection().AddRazorComponents()
+                        .Services.AddAntiforgery()
+                        .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+                        .AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment())
+                        .BuildServiceProvider();
+
+        var invoker = new RazorComponentEndpointInvoker(
+            new EndpointHtmlRenderer(
+                services,
+                NullLoggerFactory.Instance),
+            NullLogger<RazorComponentEndpointInvoker>.Instance);
+
+        var context = new DefaultHttpContext();
+        context.SetEndpoint(new RouteEndpoint(
+            ctx => Task.CompletedTask,
+            RoutePatternFactory.Parse("/"),
+            0,
+            new EndpointMetadataCollection(
+                new ComponentTypeMetadata(typeof(SimpleComponent)),
+                new RootComponentMetadata(typeof(SimpleComponent)),
+                new ConfiguredRenderModesMetadata(Array.Empty<IComponentRenderMode>())),
+            "test"));
+        context.Request.Method = "GET";
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("localhost");
+        context.Request.Path = "/";
+        context.Request.QueryString = new QueryString("?_handler=foo&_handler=bar");
+        context.Response.Body = new MemoryStream();
+        context.RequestServices = services;
+
+        // Act
+        await invoker.Render(context);
+
+        // Assert: 200 OK, and the form data provider is populated from the
+        // first _handler value with the GET source marker.
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        var formData = services.GetRequiredService<HttpContextFormDataProvider>();
+        Assert.True(formData.TryGetIncomingHandlerName(out var handlerName));
+        Assert.Equal("foo", handlerName);
+        Assert.Equal(FormDataSource.FormGet, formData.FormDataSource);
+    }
+
     private class TestWebHostEnvironment : IWebHostEnvironment
     {
         public string WebRootPath { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }

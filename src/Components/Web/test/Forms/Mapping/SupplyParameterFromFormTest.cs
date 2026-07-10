@@ -12,18 +12,15 @@ public class SupplyParameterFromFormTest
     [Fact]
     public async Task FindCascadingParameters_HandlesSupplyParameterFromFormValues()
     {
-        // Arrange
         var renderer = CreateRendererWithFormValueModelBinder();
         var formComponent = new FormParametersComponent();
 
-        // Act
         var componentId = renderer.AssignRootComponentId(formComponent);
         await renderer.RenderRootComponentAsync(componentId);
         var formComponentState = renderer.GetComponentState(formComponent);
 
         var result = CascadingParameterState.FindCascadingParameters(formComponentState, out _);
 
-        // Assert
         var supplier = Assert.Single(result);
         Assert.IsType<SupplyParameterFromFormValueProvider>(supplier.ValueSupplier);
     }
@@ -31,7 +28,6 @@ public class SupplyParameterFromFormTest
     [Fact]
     public async Task FindCascadingParameters_HandlesSupplyParameterFromFormValues_WithMappingScopeName()
     {
-        // Arrange
         var renderer = CreateRendererWithFormValueModelBinder();
         var formMappingScope = new FormMappingScope
         {
@@ -44,7 +40,6 @@ public class SupplyParameterFromFormTest
             }
         };
 
-        // Act
         var componentId = renderer.AssignRootComponentId(formMappingScope);
         await renderer.RenderRootComponentAsync(componentId);
         var formComponentState = renderer.Batches.Single()
@@ -53,15 +48,81 @@ public class SupplyParameterFromFormTest
 
         var result = CascadingParameterState.FindCascadingParameters(formComponentState, out _);
 
-        // Assert
         var supplier = Assert.Single(result);
         Assert.Equal(formMappingScope, supplier.ValueSupplier);
     }
 
-    static TestRenderer CreateRendererWithFormValueModelBinder()
+    [Fact]
+    public async Task FindCascadingParameters_HandlesSupplyParameterFromFormValues_WithHandler()
+    {
+        var renderer = CreateRendererWithFormValueModelBinder();
+        var formComponent = new FormParametersComponentWithHandler();
+
+        var componentId = renderer.AssignRootComponentId(formComponent);
+        await renderer.RenderRootComponentAsync(componentId);
+        var formComponentState = renderer.GetComponentState(formComponent);
+
+        var result = CascadingParameterState.FindCascadingParameters(formComponentState, out _);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task FindCascadingParameters_HandlesSupplyParameterFromFormValues_WithHandler_WhenBinderMatches()
+    {
+        var renderer = CreateRendererWithFormValueModelBinder(handlerName: "handler-name");
+        var formComponent = new FormParametersComponentWithHandler();
+
+        var componentId = renderer.AssignRootComponentId(formComponent);
+        await renderer.RenderRootComponentAsync(componentId);
+        var formComponentState = renderer.GetComponentState(formComponent);
+
+        var result = CascadingParameterState.FindCascadingParameters(formComponentState, out _);
+
+        var supplier = Assert.Single(result);
+        Assert.IsType<SupplyParameterFromFormValueProvider>(supplier.ValueSupplier);
+    }
+
+    [Fact]
+    public void GetFormName_ThrowsWhenBothHandlerAndFormNameAreSet()
+    {
+        var attribute = new SupplyParameterFromFormAttribute
+        {
+            FormName = "form-name",
+            Handler = "handler-name",
+        };
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            SupplyParameterFromFormValueProvider.GetFormName(attribute));
+        Assert.Contains("FormName", ex.Message);
+        Assert.Contains("Handler", ex.Message);
+    }
+
+    [Fact]
+    public void GetFormName_ReturnsHandlerWhenOnlyHandlerIsSet()
+    {
+        var attribute = new SupplyParameterFromFormAttribute { Handler = "handler-name" };
+        Assert.Equal("handler-name", SupplyParameterFromFormValueProvider.GetFormName(attribute));
+    }
+
+    [Fact]
+    public void GetFormName_ReturnsFormNameWhenOnlyFormNameIsSet()
+    {
+        var attribute = new SupplyParameterFromFormAttribute { FormName = "form-name" };
+        Assert.Equal("form-name", SupplyParameterFromFormValueProvider.GetFormName(attribute));
+    }
+
+    [Fact]
+    public void GetFormName_ReturnsNullWhenNeitherIsSet()
+    {
+        var attribute = new SupplyParameterFromFormAttribute();
+        Assert.Null(SupplyParameterFromFormValueProvider.GetFormName(attribute));
+    }
+
+    static TestRenderer CreateRendererWithFormValueModelBinder(string handlerName = "")
     {
         var services = new ServiceCollection();
-        var valueBinder = new TestFormModelValueBinder();
+        var valueBinder = new TestFormModelValueBinder(handlerName);
         services.AddSingleton<IFormValueMapper>(valueBinder);
         services.AddSingleton<ICascadingValueSupplier>(_ => new SupplyParameterFromFormValueProvider(
             valueBinder, mappingScopeName: ""));
@@ -76,6 +137,11 @@ public class SupplyParameterFromFormTest
     class FormParametersComponentWithName : TestComponentBase
     {
         [SupplyParameterFromForm(FormName = "handler-name")] public string FormParameter { get; set; }
+    }
+
+    class FormParametersComponentWithHandler : TestComponentBase
+    {
+        [SupplyParameterFromForm(Handler = "handler-name")] public string FormParameter { get; set; }
     }
 
     class TestFormModelValueBinder(string IncomingScopeQualifiedFormName = "") : IFormValueMapper

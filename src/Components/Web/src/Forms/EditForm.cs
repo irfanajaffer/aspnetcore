@@ -95,6 +95,22 @@ public class EditForm : ComponentBase
     /// </summary>
     [Parameter] public string? FormName { get; set; }
 
+    /// <summary>
+    /// Gets or sets the HTTP method the form uses for submission.
+    /// Supported values are <c>post</c> (the default) and <c>get</c>. When set to
+    /// <c>get</c>, the form is rendered with <c>method="get"</c> and a hidden
+    /// <c>&lt;input name="_handler"&gt;</c> field that identifies the form to the
+    /// server-side endpoint. The antiforgery token is omitted for GET forms.
+    /// </summary>
+    /// <remarks>
+    /// Using <c>get</c> as the method is only supported in server-side rendering
+    /// (SSR) scenarios. Interactive render modes (<c>InteractiveServer</c>,
+    /// <c>InteractiveWebAssembly</c>, <c>InteractiveAuto</c>) ignore this value
+    /// and always submit via a POST. Additionally, <see cref="FormName"/> must
+    /// be supplied when <c>HttpMethod</c> is <c>get</c>.
+    /// </remarks>
+    [Parameter] public string? HttpMethod { get; set; }
+
     /// <inheritdoc />
     protected override void OnParametersSet()
     {
@@ -119,6 +135,19 @@ public class EditForm : ComponentBase
                 $"{nameof(EditForm)}, do not also supply {nameof(OnValidSubmit)} or {nameof(OnInvalidSubmit)}.");
         }
 
+        // HttpMethod must be either "post" or "get" when explicitly specified
+        if (HttpMethod is not null && !HttpMethod.Equals("post", StringComparison.OrdinalIgnoreCase)
+            && !HttpMethod.Equals("get", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"{nameof(EditForm)}.{nameof(HttpMethod)} must be either \"post\" or \"get\".");
+        }
+
+        // Using HttpMethod="get" requires a form handler name so the endpoint can identify which form submitted.
+        if (string.Equals(HttpMethod, "get", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(FormName))
+        {
+            throw new InvalidOperationException($"{nameof(EditForm)}.{nameof(FormName)} must be specified when {nameof(EditForm)}.{nameof(HttpMethod)} is \"get\".");
+        }
+
         // Update _editContext if we don't have one yet, or if they are supplying a
         // potentially new EditContext, or if they are supplying a different Model
         if (Model != null && Model != _editContext?.Model)
@@ -141,7 +170,13 @@ public class EditForm : ComponentBase
 
         if (MappingContext != null)
         {
-            builder.AddAttribute(2, "method", "post");
+            // The "method" attribute. We default to "post" and let "get" opt in.
+            // If the developer specified a HttpMethod, use that (lowercased). Otherwise
+            // we render "post" when there's a mapping context (i.e. SSR form).
+            var method = !string.IsNullOrEmpty(HttpMethod)
+                ? HttpMethod!.ToLowerInvariant()
+                : "post";
+            builder.AddAttribute(2, "method", method);
         }
 
         if (Enhance)
@@ -161,13 +196,19 @@ public class EditForm : ComponentBase
                 builder.AddNamedEvent("onsubmit", FormName);
             }
 
-            RenderSSRFormHandlingChildren(builder, 6);
+            // The hidden <input name="_handler"> element is rendered by the
+            // StaticHtmlRenderer itself in response to the AddNamedEvent call
+            // above (it carries the scope-qualified form name). We do NOT also
+            // emit one here for HttpMethod="get" — doing so would produce two
+            // _handler inputs in the form and a URL like
+            // ?_handler=filter&_handler=filter when the browser submits.
+            RenderSSRFormHandlingChildren(builder, 10);
         }
 
-        builder.OpenComponent<CascadingValue<EditContext>>(7);
-        builder.AddComponentParameter(7, "IsFixed", true);
-        builder.AddComponentParameter(8, "Value", _editContext);
-        builder.AddComponentParameter(9, "ChildContent", ChildContent?.Invoke(_editContext));
+        builder.OpenComponent<CascadingValue<EditContext>>(11);
+        builder.AddComponentParameter(11, "IsFixed", true);
+        builder.AddComponentParameter(12, "Value", _editContext);
+        builder.AddComponentParameter(13, "ChildContent", ChildContent?.Invoke(_editContext));
         builder.CloseComponent();
 
         builder.CloseElement();
@@ -183,8 +224,13 @@ public class EditForm : ComponentBase
         builder.AddComponentParameter(2, nameof(FormMappingValidator.CurrentEditContext), EditContext);
         builder.CloseComponent();
 
-        builder.OpenComponent<AntiforgeryToken>(3);
-        builder.CloseComponent();
+        // Antiforgery tokens are only required for non-idempotent submissions. For
+        // GET forms the request is idempotent, so we skip the token.
+        if (!string.Equals(HttpMethod, "get", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.OpenComponent<AntiforgeryToken>(3);
+            builder.CloseComponent();
+        }
 
         builder.CloseRegion();
     }

@@ -87,7 +87,8 @@ internal partial class RazorComponentEndpointInvoker : IRazorComponentEndpointIn
             context,
             componentType: pageComponent,
             handler: result.HandlerName,
-            form: result.HandlerName != null && context.Request.HasFormContentType ? await context.Request.ReadFormAsync() : null);
+            form: result.HandlerName != null && context.Request.HasFormContentType ? await context.Request.ReadFormAsync() : null,
+            isFormPost: result.IsPost);
 
         // Matches MVC's MemoryPoolHttpResponseStreamWriterFactory.DefaultBufferSize
         var defaultBufferSize = 16 * 1024;
@@ -276,6 +277,20 @@ internal partial class RazorComponentEndpointInvoker : IRazorComponentEndpointIn
             return new(valid && !isBadRequest, processPost, handler);
         }
 
+        // A GET request can still be a form submission when the <form method="get">
+        // element was used. In that case, the form fields are encoded into the URL's
+        // query string, including a special "_handler" query parameter that identifies
+        // which form handler should run. Antiforgery validation is not performed because
+        // GET forms are idempotent.
+        if (HttpMethods.IsGet(context.Request.Method) && context.Features.Get<IExceptionHandlerFeature>() == null)
+        {
+            var handler = GetFormHandlerFromQuery(context, out var isBadRequest);
+            if (handler is not null)
+            {
+                return new RequestValidationState(!isBadRequest, isPost: false, handler);
+            }
+        }
+
         return RequestValidationState.ValidNonPostRequest;
     }
 
@@ -293,6 +308,26 @@ internal partial class RazorComponentEndpointInvoker : IRazorComponentEndpointIn
             {
                 return value[0]!;
             }
+        }
+        return null;
+    }
+
+    private static string? GetFormHandlerFromQuery(HttpContext context, out bool isBadRequest)
+    {
+        isBadRequest = false;
+        if (context.Request.Query.TryGetValue("_handler", out var value))
+        {
+            // Browsers will only ever emit a single _handler value for a form,
+            // but the URL is user-editable: a request that ends up in the
+            // browser address bar (or a server-to-server call) can contain a
+            // duplicated _handler parameter. Treat that as the first value
+            // rather than 400-ing the request, so GET form submissions are as
+            // forgiving as plain navigations.
+            if (value.Count == 0)
+            {
+                return null;
+            }
+            return value[0]!;
         }
         return null;
     }
