@@ -37,7 +37,6 @@ internal class SupplyParameterFromFormValueProvider : ICascadingValueSupplier
             return true;
         }
 
-        // We also supply values for [SupplyValueFromForm]
         if (_formValueMapper is not null && parameterInfo.Attribute is SupplyParameterFromFormAttribute supplyParameterFromFormAttribute)
         {
             return _formValueMapper.CanMap(parameterInfo.PropertyType, MappingScopeName, GetFormName(supplyParameterFromFormAttribute));
@@ -48,13 +47,11 @@ internal class SupplyParameterFromFormValueProvider : ICascadingValueSupplier
 
     public object? GetCurrentValue(object? key, in CascadingParameterInfo parameterInfo)
     {
-        // We supply a FormMappingContext
         if (parameterInfo.Attribute is CascadingParameterAttribute && parameterInfo.PropertyType == typeof(FormMappingContext))
         {
             return _mappingContext;
         }
 
-        // We also supply values for [SupplyValueFromForm]
         if (_formValueMapper is { } valueMapper && parameterInfo.Attribute is SupplyParameterFromFormAttribute)
         {
             return GetFormPostValue(valueMapper, _mappingContext, parameterInfo);
@@ -91,9 +88,6 @@ internal class SupplyParameterFromFormValueProvider : ICascadingValueSupplier
         return context.Result;
     }
 
-    // Returns the form name to match against. Handler (the new property) takes
-    // precedence; we fall back to FormName for backward compatibility. If both
-    // are supplied this is a configuration error and we throw.
     internal static string? GetFormName(SupplyParameterFromFormAttribute attribute)
     {
         if (!string.IsNullOrEmpty(attribute.Handler) && !string.IsNullOrEmpty(attribute.FormName))

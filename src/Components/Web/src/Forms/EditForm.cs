@@ -135,14 +135,12 @@ public class EditForm : ComponentBase
                 $"{nameof(EditForm)}, do not also supply {nameof(OnValidSubmit)} or {nameof(OnInvalidSubmit)}.");
         }
 
-        // HttpMethod must be either "post" or "get" when explicitly specified
         if (HttpMethod is not null && !HttpMethod.Equals("post", StringComparison.OrdinalIgnoreCase)
             && !HttpMethod.Equals("get", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException($"{nameof(EditForm)}.{nameof(HttpMethod)} must be either \"post\" or \"get\".");
         }
 
-        // Using HttpMethod="get" requires a form handler name so the endpoint can identify which form submitted.
         if (string.Equals(HttpMethod, "get", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(FormName))
         {
             throw new InvalidOperationException($"{nameof(EditForm)}.{nameof(FormName)} must be specified when {nameof(EditForm)}.{nameof(HttpMethod)} is \"get\".");
@@ -170,9 +168,6 @@ public class EditForm : ComponentBase
 
         if (MappingContext != null)
         {
-            // The "method" attribute. We default to "post" and let "get" opt in.
-            // If the developer specified a HttpMethod, use that (lowercased). Otherwise
-            // we render "post" when there's a mapping context (i.e. SSR form).
             var method = !string.IsNullOrEmpty(HttpMethod)
                 ? HttpMethod!.ToLowerInvariant()
                 : "post";
@@ -196,12 +191,6 @@ public class EditForm : ComponentBase
                 builder.AddNamedEvent("onsubmit", FormName);
             }
 
-            // The hidden <input name="_handler"> element is rendered by the
-            // StaticHtmlRenderer itself in response to the AddNamedEvent call
-            // above (it carries the scope-qualified form name). We do NOT also
-            // emit one here for HttpMethod="get" — doing so would produce two
-            // _handler inputs in the form and a URL like
-            // ?_handler=filter&_handler=filter when the browser submits.
             RenderSSRFormHandlingChildren(builder, 10);
         }
 
@@ -224,8 +213,6 @@ public class EditForm : ComponentBase
         builder.AddComponentParameter(2, nameof(FormMappingValidator.CurrentEditContext), EditContext);
         builder.CloseComponent();
 
-        // Antiforgery tokens are only required for non-idempotent submissions. For
-        // GET forms the request is idempotent, so we skip the token.
         if (!string.Equals(HttpMethod, "get", StringComparison.OrdinalIgnoreCase))
         {
             builder.OpenComponent<AntiforgeryToken>(3);
