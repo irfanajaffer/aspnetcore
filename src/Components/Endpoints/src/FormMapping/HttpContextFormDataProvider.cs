@@ -26,14 +26,24 @@ internal sealed class HttpContextFormDataProvider
     /// <summary>
     /// Gets the source of the form data currently stored in this provider.
     /// </summary>
-    public FormDataSource FormDataSource => _formDataSource;
+    internal FormDataSource FormDataSource => _formDataSource;
 
     public void SetFormData(string incomingHandlerName, IReadOnlyDictionary<string, StringValues> form, IFormFileCollection formFiles)
     {
+        // Don't overwrite form data from the query string with an empty form from the body.
+        // This can happen if something calls ReadFormAsync() on a GET request.
+        if (_formDataSource == FormDataSource.FormGet && form.Count == 0 && formFiles.Count == 0)
+        {
+            return;
+        }
+
         _incomingHandlerName = incomingHandlerName;
         _entries = form;
         _formFiles = formFiles;
-        _formDataSource = FormDataSource.FormPost;
+        if (form.Count > 0 || formFiles.Count > 0)
+        {
+            _formDataSource = FormDataSource.FormPost;
+        }
     }
 
     /// <summary>
@@ -46,6 +56,8 @@ internal sealed class HttpContextFormDataProvider
     public void SetFormDataFromQuery(string incomingHandlerName, IQueryCollection query)
     {
         _incomingHandlerName = incomingHandlerName;
+        // Preserve duplicate query-string keys so form binding can round-trip the full
+        // collection, matching the behavior of IFormCollection for POST bodies.
         _entries = new QueryCollectionReadOnlyDictionary(query);
         _formFiles = _emptyFormFiles;
         _formDataSource = FormDataSource.FormGet;
@@ -102,7 +114,7 @@ internal sealed class HttpContextFormDataProvider
 /// <summary>
 /// Indicates the source of the form data that <see cref="HttpContextFormDataProvider"/> is currently storing.
 /// </summary>
-public enum FormDataSource
+internal enum FormDataSource
 {
     /// <summary>
     /// No form data has been set.

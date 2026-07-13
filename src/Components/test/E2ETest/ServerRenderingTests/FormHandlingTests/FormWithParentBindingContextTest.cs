@@ -105,21 +105,24 @@ public class FormWithParentBindingContextTest : ServerTestBase<BasicTestAppServe
         DispatchToFormCore(dispatchToForm);
     }
 
-    [Fact]
-    public void CanBindParameterFromGetFormQueryString()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CanBindParameterFromGetFormQueryString(bool suppressEnhancedNavigation)
     {
+        SuppressEnhancedNavigation(suppressEnhancedNavigation);
         Navigate($"{ServerPathBase}/get-form-binding-demo");
 
         Browser.Exists(By.CssSelector("form[method='get']"));
 
-        var queryInput = Browser.Exists(By.CssSelector("input[name='Filter.Query']"));
-        queryInput.Clear();
-        queryInput.SendKeys("audio");
+        Browser.Exists(By.CssSelector("input[name='Filter.Query']")).Clear();
+        Browser.Exists(By.CssSelector("input[name='Filter.Query']")).SendKeys("audio");
         Browser.Exists(By.CssSelector("button[type='submit']")).Click();
 
         Browser.Contains("_handler=filter", () => Browser.Url);
         Browser.Contains("Filter.Query=audio", () => Browser.Url);
         Browser.Equal("Filter[Query=audio, Category=, Price=[Min=, Max=], SortBy=Name, InStockOnly=False, Tags=[]]", () => Browser.Exists(By.CssSelector("dd pre")).Text);
+        Browser.Contains("Matching products", () => Browser.Exists(By.TagName("body")).Text);
         Browser.Contains("Audio", () => Browser.Exists(By.TagName("body")).Text);
     }
 

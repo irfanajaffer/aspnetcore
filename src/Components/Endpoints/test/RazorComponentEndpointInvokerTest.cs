@@ -52,6 +52,31 @@ public class RazorComponentEndpointInvokerTest
         Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
     }
 
+    private sealed class GetFormSubmitComponent : Microsoft.AspNetCore.Components.ComponentBase
+    {
+        [SupplyParameterFromForm(Handler = "search", Name = "Value")]
+        public string Value { get; set; } = string.Empty;
+
+        public static int SubmitCount { get; private set; }
+
+        public static string LastValue { get; private set; } = string.Empty;
+
+        protected override void OnParametersSet()
+        {
+            if (Value is not null)
+            {
+                SubmitCount++;
+                LastValue = Value;
+            }
+        }
+
+        public static void Reset()
+        {
+            SubmitCount = 0;
+            LastValue = null;
+        }
+    }
+
     [Fact]
     public async Task Invoker_HandlesHeadRequestAsync()
     {
@@ -221,6 +246,48 @@ public class RazorComponentEndpointInvokerTest
         Assert.True(formData.TryGetIncomingHandlerName(out var handlerName));
         Assert.Equal("foo", handlerName);
         Assert.Equal(FormDataSource.FormGet, formData.FormDataSource);
+    }
+
+    [Fact]
+    public async Task Invoker_InvokesSubmitHandlerForGetRequest()
+    {
+        GetFormSubmitComponent.Reset();
+
+        var services = new ServiceCollection().AddRazorComponents()
+                        .Services.AddAntiforgery()
+                        .AddSingleton<IConfiguration>(new ConfigurationBuilder().Build())
+                        .AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment())
+                        .BuildServiceProvider();
+
+        var invoker = new RazorComponentEndpointInvoker(
+            new EndpointHtmlRenderer(
+                services,
+                NullLoggerFactory.Instance),
+            NullLogger<RazorComponentEndpointInvoker>.Instance);
+
+        var context = new DefaultHttpContext();
+        context.SetEndpoint(new RouteEndpoint(
+            ctx => Task.CompletedTask,
+            RoutePatternFactory.Parse("/search"),
+            0,
+            new EndpointMetadataCollection(
+                new ComponentTypeMetadata(typeof(GetFormSubmitComponent)),
+                new RootComponentMetadata(typeof(GetFormSubmitComponent)),
+                new ConfiguredRenderModesMetadata(Array.Empty<IComponentRenderMode>())),
+            "test"));
+        context.Request.Method = "GET";
+        context.Request.Scheme = "https";
+        context.Request.Host = new HostString("localhost");
+        context.Request.Path = "/search";
+        context.Request.QueryString = new QueryString("?_handler=search&Value=hello");
+        context.Response.Body = new MemoryStream();
+        context.RequestServices = services;
+
+        await invoker.Render(context);
+
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        Assert.Equal(1, GetFormSubmitComponent.SubmitCount);
+        Assert.Equal("hello", GetFormSubmitComponent.LastValue);
     }
 
     private class TestWebHostEnvironment : IWebHostEnvironment

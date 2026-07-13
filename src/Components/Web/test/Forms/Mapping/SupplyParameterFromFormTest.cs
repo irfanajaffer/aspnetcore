@@ -12,15 +12,18 @@ public class SupplyParameterFromFormTest
     [Fact]
     public async Task FindCascadingParameters_HandlesSupplyParameterFromFormValues()
     {
+        // Arrange
         var renderer = CreateRendererWithFormValueModelBinder();
         var formComponent = new FormParametersComponent();
 
+        // Act
         var componentId = renderer.AssignRootComponentId(formComponent);
         await renderer.RenderRootComponentAsync(componentId);
         var formComponentState = renderer.GetComponentState(formComponent);
 
         var result = CascadingParameterState.FindCascadingParameters(formComponentState, out _);
 
+        // Assert
         var supplier = Assert.Single(result);
         Assert.IsType<SupplyParameterFromFormValueProvider>(supplier.ValueSupplier);
     }
@@ -28,6 +31,7 @@ public class SupplyParameterFromFormTest
     [Fact]
     public async Task FindCascadingParameters_HandlesSupplyParameterFromFormValues_WithMappingScopeName()
     {
+        // Arrange
         var renderer = CreateRendererWithFormValueModelBinder();
         var formMappingScope = new FormMappingScope
         {
@@ -40,6 +44,7 @@ public class SupplyParameterFromFormTest
             }
         };
 
+        // Act
         var componentId = renderer.AssignRootComponentId(formMappingScope);
         await renderer.RenderRootComponentAsync(componentId);
         var formComponentState = renderer.Batches.Single()
@@ -48,6 +53,7 @@ public class SupplyParameterFromFormTest
 
         var result = CascadingParameterState.FindCascadingParameters(formComponentState, out _);
 
+        // Assert
         var supplier = Assert.Single(result);
         Assert.Equal(formMappingScope, supplier.ValueSupplier);
     }

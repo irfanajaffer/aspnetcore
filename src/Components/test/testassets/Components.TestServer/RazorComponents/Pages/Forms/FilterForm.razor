@@ -1,0 +1,121 @@
+@* Licensed to the .NET Foundation under one or more agreements. *@
+@* The .NET Foundation licenses this file to you under the MIT license. *@
+
+@* A reusable filter form rendered as `method="get"`. Used by the *@
+@* GET-form binding sample page in this test asset. *@
+
+@using Microsoft.AspNetCore.Components.Forms
+
+<EditForm Model="Filter" FormName="@FormName" HttpMethod="@HttpMethod" Enhance="true" OnValidSubmit="HandleSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="row">
+        <label>
+            <span>Query</span>
+            <InputText @bind-Value="Filter.Query" />
+        </label>
+
+        <label>
+            <span>Category</span>
+            <InputSelect @bind-Value="Filter.Category">
+                <option value="">(any)</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Furniture">Furniture</option>
+                <option value="Kitchen">Kitchen</option>
+            </InputSelect>
+        </label>
+    </div>
+
+    <div class="row">
+        <label>
+            <span>Min price</span>
+            <InputNumber @bind-Value="Filter.Price.Min" TValue="decimal" />
+        </label>
+
+        <label>
+            <span>Max price</span>
+            <InputNumber @bind-Value="Filter.Price.Max" TValue="decimal" />
+        </label>
+
+        <label>
+            <span>Sort by</span>
+            <InputSelect @bind-Value="Filter.SortBy">
+                @foreach (var order in Enum.GetValues<ProductSortOrder>())
+                {
+                    <option value="@order">@order</option>
+                }
+            </InputSelect>
+        </label>
+    </div>
+
+    <div class="row">
+        <label>
+            <InputCheckbox @bind-Value="Filter.InStockOnly" />
+            <span>In stock only</span>
+        </label>
+    </div>
+
+    <fieldset>
+        <legend>Tags</legend>
+        @foreach (var tag in _availableTags)
+        {
+            <label>
+                <input type="checkbox"
+                       name="@($"{FieldPrefix}.Tags")"
+                       value="@tag"
+                       checked="@Filter.Tags.Contains(tag)"
+                       @onchange="e => ToggleTag(tag, (bool)e.Value!)" />
+                <span>@tag</span>
+            </label>
+        }
+    </fieldset>
+
+    <button type="submit">Apply filter</button>
+</EditForm>
+
+@code {
+    /// <summary>
+    /// The form handler name. Used in two places:
+    ///   1. The form renders an &lt;input name="_handler" value="@FormName"/&gt;
+    ///      so the server-side endpoint can identify which form submitted.
+    ///   2. The [SupplyParameterFromForm(Handler = "...")] attribute on the
+    ///      page declares it wants data from this form.
+    /// </summary>
+    [Parameter, EditorRequired] public string FormName { get; set; } = "filter";
+
+    /// <summary>
+    /// The model being edited.
+    /// </summary>
+    [Parameter, EditorRequired] public ProductFilter Filter { get; set; } = new();
+
+    /// <summary>
+    /// Optional callback for submit handling.
+    /// </summary>
+    [Parameter] public EventCallback Submit { get; set; }
+    [Parameter] public string HttpMethod { get; set; } = "get";
+
+    private static readonly string[] _availableTags = new[] { "office", "peripherals", "audio", "kitchen" };
+
+    // The "FieldPrefix" matches the parameter name that [SupplyParameterFromForm]
+    // expects; without a prefix, the binder looks up entries by their top-level
+    // name. We can leave this empty when the bound parameter itself is the
+    // ProductFilter.
+    private const string FieldPrefix = "Filter";
+
+    private void ToggleTag(string tag, bool isOn)
+    {
+        if (isOn && !Filter.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+        {
+            Filter.Tags.Add(tag);
+        }
+        else if (!isOn)
+        {
+            ((List<string>)Filter.Tags).RemoveAll(t => string.Equals(t, tag, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private Task HandleSubmit()
+    {
+        return Submit.InvokeAsync();
+    }
+}

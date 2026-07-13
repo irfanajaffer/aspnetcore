@@ -1,0 +1,117 @@
+@* Licensed to the .NET Foundation under one or more agreements. *@
+@* The .NET Foundation licenses this file to you under the MIT license. *@
+
+@* Sample page for testing [SupplyParameterFromForm(Handler = ...)] binding from
+   a GET request's query string. The page renders a form with method="get" and
+   binds a complex model to a property using the new Handler property of
+   [SupplyParameterFromForm]. *@
+
+@page "/get-form-binding-demo"
+@using Microsoft.AspNetCore.Components.Forms
+
+<h2>GET form binding demo</h2>
+
+<p>
+    Submit the filter form below. The browser navigates with the form fields
+    encoded in the URL's query string. The page then shows two views of the
+    same data to compare the <strong>current</strong> behavior with the
+    <strong>expected</strong> behavior.
+</p>
+
+<h2>The form (renders as <code>method="get"</code>)</h2>
+
+<FilterForm FormName="filter" Filter="_filter" HttpMethod="get" Submit="OnSubmit" />
+
+<hr />
+
+<h2>Result of binding</h2>
+
+<dl>
+    <dt>
+        <code>ManualFilter</code>
+        <small>plain field (no binding attribute)</small>
+    </dt>
+    <dd>
+        <em>// CURRENT (broken): always null on a GET.</em>
+        <pre>@(ManualFilter?.ToString() ?? "null")</pre>
+    </dd>
+
+    <dt>
+        <code>BoundFilter</code>
+        <small>[SupplyParameterFromForm(Handler = "filter")]</small>
+    </dt>
+    <dd>
+        <em>// EXPECTED (with this feature): populated from the query string.</em>
+        <pre>@(BoundFilter?.ToString() ?? "null")</pre>
+    </dd>
+</dl>
+
+@if (BoundFilter is not null)
+{
+    <h2>Matching products</h2>
+    <table>
+        <thead>
+            <tr><th>Id</th><th>Name</th><th>Category</th><th>Price</th><th>In stock</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var p in _results)
+            {
+                <tr>
+                    <td>@p.Id</td>
+                    <td>@p.Name</td>
+                    <td>@p.Category</td>
+                    <td>@p.Price</td>
+                    <td>@(p.InStock ? "yes" : "no")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    // A blank filter the user can edit.
+    private ProductFilter _filter = new();
+
+    // The catalog we query against.
+    [Inject] private ProductCatalog Catalog { get; set; } = default!;
+
+    // The "current" behavior - a plain field, no binding attribute.
+    public ProductFilter? ManualFilter { get; set; }
+
+    // The "expected" behavior with this feature. The new Handler property
+    // associates the parameter with the form whose EditForm.FormName (and the
+    // rendered <input name="_handler">) match the value "filter". When the
+    // request comes in via GET, the framework populates
+    // HttpContextFormDataProvider from request.Query and the same complex model
+    // binding pipeline (FormDataMapper / FormDataReader / FormDataConverterOfT)
+    // used for POST runs to map the values.
+    [SupplyParameterFromForm(Handler = "filter", Name = "Filter")]
+    public ProductFilter? BoundFilter { get; set; }
+
+    // We rebuild the model used by the form whenever BoundFilter changes so
+    // the form is pre-populated with the user's previous input on the
+    // redirected URL.
+    protected override void OnParametersSet()
+    {
+        if (BoundFilter is not null)
+        {
+            _filter = BoundFilter;
+            // On a GET form submit the OnSubmit callback is not invoked (the
+            // browser just navigates to the same URL with the query string).
+            // The only chance we have to compute the matching products is here,
+            // whenever the framework has just bound BoundFilter from the query.
+            _results = Catalog.Apply(BoundFilter);
+        }
+    }
+
+    // The product list to display, computed from BoundFilter when present.
+    private IReadOnlyList<Product> _results = Array.Empty<Product>();
+
+    private void OnSubmit()
+    {
+        if (BoundFilter is not null)
+        {
+            _results = Catalog.Apply(BoundFilter);
+        }
+    }
+}

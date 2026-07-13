@@ -122,6 +122,8 @@ public class RazorComponentEndpointsStartup<TRootComponent>
         services.AddSingleton<AsyncOperationService>();
         services.AddCascadingAuthenticationState();
         services.AddSingleton<WebSocketCompressionConfiguration>();
+        // Used by the GET-form binding sample page (GetFormBindingDemo.razor).
+        services.AddSingleton<ProductCatalog>();
 
         var circuitContextAccessor = new TestCircuitContextAccessor();
         services.AddSingleton<CircuitHandler>(circuitContextAccessor);
