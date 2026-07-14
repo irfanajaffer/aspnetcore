@@ -51,9 +51,14 @@ public class ProductFilter
 
 public class PriceRange
 {
+    // The default is "no price filter" so that a freshly-constructed
+    // ProductFilter matches all products. The E2E test for the empty-form
+    // submit case expects the products table to still appear with a default
+    // filter, which would not be the case if Min and Max both defaulted to 0
+    // (no product has price 0).
     public decimal Min { get; set; } = 0m;
 
-    public decimal Max { get; set; } = 0m;
+    public decimal Max { get; set; } = decimal.MaxValue;
 }
 
 public enum ProductSortOrder

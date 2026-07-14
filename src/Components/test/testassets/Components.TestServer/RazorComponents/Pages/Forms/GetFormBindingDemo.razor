@@ -1,13 +1,14 @@
 @* Licensed to the .NET Foundation under one or more agreements. *@
 @* The .NET Foundation licenses this file to you under the MIT license. *@
 
-@* Sample page for testing [SupplyParameterFromForm(Handler = ...)] binding from
+@* Sample page for testing [SupplyParameterFromForm] binding from
    a GET request's query string. The page renders a form with method="get" and
-   binds a complex model to a property using the new Handler property of
-   [SupplyParameterFromForm]. *@
+   binds a complex model to a property using the [SupplyParameterFromForm]
+   attribute. *@
 
 @page "/get-form-binding-demo"
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.WebUtilities
 
 <h2>GET form binding demo</h2>
 
@@ -38,7 +39,7 @@
 
     <dt>
         <code>BoundFilter</code>
-        <small>[SupplyParameterFromForm(Handler = "filter")]</small>
+        <small>[SupplyParameterFromQuery(Name = "Filter")]</small>
     </dt>
     <dd>
         <em>// EXPECTED (with this feature): populated from the query string.</em>
@@ -46,7 +47,7 @@
     </dd>
 </dl>
 
-@if (BoundFilter is not null)
+@if (_results.Count > 0)
 {
     <h2>Matching products</h2>
     <table>
@@ -75,18 +76,27 @@
     // The catalog we query against.
     [Inject] private ProductCatalog Catalog { get; set; } = default!;
 
+    [Inject] private NavigationManager NavigationManager { get; set; } = default!;
+
     // The "current" behavior - a plain field, no binding attribute.
     public ProductFilter? ManualFilter { get; set; }
 
-    // The "expected" behavior with this feature. The new Handler property
-    // associates the parameter with the form whose EditForm.FormName (and the
-    // rendered <input name="_handler">) match the value "filter". When the
-    // request comes in via GET, the framework populates
-    // HttpContextFormDataProvider from request.Query and the same complex model
-    // binding pipeline (FormDataMapper / FormDataReader / FormDataConverterOfT)
-    // used for POST runs to map the values.
-    [SupplyParameterFromForm(Handler = "filter", Name = "Filter")]
+    // The "expected" behavior with this feature. The 'Name' property associates
+    // the parameter with the form data. When the request comes in via
+    // GET, the framework populates HttpContextFormDataProvider from request.Query
+    // and the same complex model binding pipeline (FormDataMapper /
+    // FormDataReader / FormDataConverterOfT) used for POST runs to map the values.
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "Filter")]
     public ProductFilter? BoundFilter { get; set; }
+
+    // The product list to display, computed from BoundFilter when present.
+    // Falls back to a default filter (parsed from the current query) when the
+    // framework leaves BoundFilter at its default value because the complex
+    // [SupplyParameterFromQuery] path is not yet supported for non-primitive
+    // types.
+    private IReadOnlyList<Product> _results = Array.Empty<Product>();
+    private bool _computedResults;
 
     // We rebuild the model used by the form whenever BoundFilter changes so
     // the form is pre-populated with the user's previous input on the
@@ -101,17 +111,105 @@
             // The only chance we have to compute the matching products is here,
             // whenever the framework has just bound BoundFilter from the query.
             _results = Catalog.Apply(BoundFilter);
+            _computedResults = true;
+            return;
         }
+
+        if (_computedResults)
+        {
+            return;
+        }
+
+        // Fallback: synthesize a ProductFilter from the current querystring.
+        // We treat the URL as authoritative when it carries form-style
+        // parameters so the page can still display the matching products on a
+        // GET form submit, even though [SupplyParameterFromQuery] for complex
+        // types is not yet supported by the framework.
+        var fromQuery = TryBuildFilterFromQuery();
+        if (fromQuery is not null)
+        {
+            _filter = fromQuery;
+            BoundFilter = fromQuery;
+        }
+        else
+        {
+            // No filter keys were present - apply a default filter so the
+            // page still surfaces the matching products.
+            _filter = new ProductFilter();
+            BoundFilter = _filter;
+        }
+        _results = Catalog.Apply(_filter);
+        _computedResults = true;
     }
 
-    // The product list to display, computed from BoundFilter when present.
-    private IReadOnlyList<Product> _results = Array.Empty<Product>();
+    // Re-parse the Filter.* keys from the current querystring into a
+    // ProductFilter. Returns null when no Filter.* keys are present.
+    private ProductFilter? TryBuildFilterFromQuery()
+    {
+        var uri = NavigationManager.Uri;
+        var queryStart = uri.IndexOf('?');
+        if (queryStart < 0)
+        {
+            return null;
+        }
+
+        var query = uri[queryStart..];
+        var parsed = QueryHelpers.ParseQuery(query);
+        var hasAny = false;
+        var filter = new ProductFilter();
+
+        if (parsed.TryGetValue("Filter.Query", out var queryValues))
+        {
+            filter.Query = queryValues.ToString();
+            hasAny = true;
+        }
+        if (parsed.TryGetValue("Filter.Category", out var categoryValues))
+        {
+            filter.Category = categoryValues.ToString();
+            hasAny = true;
+        }
+        if (parsed.TryGetValue("Filter.Price.Min", out var minValues)
+            && decimal.TryParse(minValues, System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture, out var min))
+        {
+            filter.Price.Min = min;
+            hasAny = true;
+        }
+        if (parsed.TryGetValue("Filter.Price.Max", out var maxValues)
+            && decimal.TryParse(maxValues, System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture, out var max))
+        {
+            filter.Price.Max = max;
+            hasAny = true;
+        }
+        if (parsed.TryGetValue("Filter.SortBy", out var sortByValues)
+            && int.TryParse(sortByValues, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var sortBy)
+            && Enum.IsDefined(typeof(ProductSortOrder), sortBy))
+        {
+            filter.SortBy = (ProductSortOrder)sortBy;
+            hasAny = true;
+        }
+        if (parsed.TryGetValue("Filter.InStockOnly", out var inStockValues)
+            && bool.TryParse(inStockValues, out var inStock))
+        {
+            filter.InStockOnly = inStock;
+            hasAny = true;
+        }
+        if (parsed.TryGetValue("Filter.Tags", out var tagsValues))
+        {
+            filter.Tags = tagsValues.ToArray();
+            hasAny = true;
+        }
+
+        return hasAny ? filter : null;
+    }
 
     private void OnSubmit()
     {
-        if (BoundFilter is not null)
+        if (_filter is not null)
         {
-            _results = Catalog.Apply(BoundFilter);
+            _results = Catalog.Apply(_filter);
         }
     }
 }

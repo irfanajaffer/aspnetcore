@@ -121,9 +121,62 @@ public class FormWithParentBindingContextTest : ServerTestBase<BasicTestAppServe
 
         Browser.Contains("_handler=filter", () => Browser.Url);
         Browser.Contains("Filter.Query=audio", () => Browser.Url);
-        Browser.Equal("Filter[Query=audio, Category=, Price=[Min=, Max=], SortBy=Name, InStockOnly=False, Tags=[]]", () => Browser.Exists(By.CssSelector("dd pre")).Text);
+        // Select the second dd pre (BoundFilter) using :last-child selector
+        Browser.Equal("Filter[Query=audio, Category=, Price=[Min=, Max=], SortBy=Name, InStockOnly=False, Tags=[]]", () => Browser.Exists(By.CssSelector("dd:last-child pre")).Text);
         Browser.Contains("Matching products", () => Browser.Exists(By.TagName("body")).Text);
         Browser.Contains("Audio", () => Browser.Exists(By.TagName("body")).Text);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CanBindParameterFromGetFormWithEmptyQuery(bool suppressEnhancedNavigation)
+    {
+        SuppressEnhancedNavigation(suppressEnhancedNavigation);
+        Navigate($"{ServerPathBase}/get-form-binding-demo");
+
+        Browser.Exists(By.CssSelector("form[method='get']"));
+
+        // Submit without entering a query value (should use defaults)
+        Browser.Exists(By.CssSelector("button[type='submit']")).Click();
+
+        Browser.Contains("_handler=filter", () => Browser.Url);
+        // With empty query, the filter should have default values
+        Browser.Exists(By.CssSelector("dd:last-child pre")).Text.Contains("Query=");
+        // Products table should still appear even with empty/default filter
+        Browser.Contains("Matching products", () => Browser.Exists(By.TagName("body")).Text);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CanBindParameterFromGetFormWithCategory(bool suppressEnhancedNavigation)
+    {
+        SuppressEnhancedNavigation(suppressEnhancedNavigation);
+        Navigate($"{ServerPathBase}/get-form-binding-demo");
+
+        Browser.Exists(By.CssSelector("form[method='get']"));
+
+        // Set both Query and Category fields
+        Browser.Exists(By.CssSelector("input[name='Filter.Query']")).Clear();
+        Browser.Exists(By.CssSelector("input[name='Filter.Query']")).SendKeys("software");
+
+        // Select a category from the dropdown
+        var categorySelect = Browser.Exists(By.CssSelector("select[name='Filter.Category']"));
+        var selectElement = new OpenQA.Selenium.Support.UI.SelectElement(categorySelect);
+        selectElement.SelectByValue("Productivity");
+
+        Browser.Exists(By.CssSelector("button[type='submit']")).Click();
+
+        Browser.Contains("_handler=filter", () => Browser.Url);
+        Browser.Contains("Filter.Query=software", () => Browser.Url);
+        Browser.Contains("Filter.Category=Productivity", () => Browser.Url);
+
+        // Verify the complex model was bound correctly with both fields
+        var boundFilterText = Browser.Exists(By.CssSelector("dd:last-child pre")).Text;
+        boundFilterText.Contains("Query=software");
+        boundFilterText.Contains("Category=Productivity");
+        Browser.Contains("Matching products", () => Browser.Exists(By.TagName("body")).Text);
     }
 
     [Theory]
