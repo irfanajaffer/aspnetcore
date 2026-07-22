@@ -39,7 +39,7 @@ internal sealed class DefaultAntiforgeryTokenSerializer : IAntiforgeryTokenSeria
                 : (tokenBytesRent = ArrayPool<byte>.Shared.Rent(maxTokenDecodedSize));
             var tokenBytes = rent[..maxTokenDecodedSize];
 
-            var bytesWritten = WebEncoders.Base64UrlDecode(serializedToken, tokenBytes);
+            Base64Url.DecodeFromChars(serializedToken, tokenBytes, out _, out var bytesWritten);
             var tokenBytesDecoded = tokenBytes[..bytesWritten];
 
             if (_perfCryptoSystem is not null)
