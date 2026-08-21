@@ -934,6 +934,10 @@ public class RoutingTest : ServerTestBase<ToggleExecutionModeServerFixture<Progr
         Browser.FindElement(By.Id("add-navigation-lock")).Click();
         Browser.FindElement(By.CssSelector("#navigation-lock-0 > input.block-internal-navigation")).Click();
 
+        // Wait for the location-changing handler registration to round-trip before navigating,
+        // otherwise the pushState below can race ahead of it and bypass the lock.
+        Browser.Equal("true", () => Browser.FindElement(By.CssSelector("#navigation-lock-0 > input.navigation-lock-ready")).GetDomProperty("value"));
+
         var uriBeforeBlockedNavigation = Browser.FindElement(By.Id("test-info")).Text;
         var relativeCanceledUri = "/mycanceledtestpath";
         var expectedCanceledAbsoluteUri = $"{_serverFixture.RootUri}subdir{relativeCanceledUri}";
