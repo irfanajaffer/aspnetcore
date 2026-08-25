@@ -37,6 +37,11 @@ const ScrollSource = {
   RestoreSnapshot: 3,
 } as const;
 type ScrollSource = typeof ScrollSource[keyof typeof ScrollSource];
+type PendingIntersectionEntry = {
+  entry: IntersectionObserverEntry;
+  source: ScrollSource;
+  programmaticScrollGeneration: number;
+};
 
 function findClosestScrollContainer(element: HTMLElement | null): HTMLElement | null {
   // If we recurse up as far as body or the document root, return null so that the
@@ -253,6 +258,7 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
 
   // Called by C# at the start of a programmatic ScrollToItem, before the align scroll itself.
   function beginProgrammaticScroll(): void {
+    programmaticScrollGeneration++;
     stopConvergenceObserving();
     clearBottomFollow();
     scrollActivity.source = ScrollSource.AlignToItem;
@@ -618,9 +624,10 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
   subscribeToScroll();
 
   const { observersByDotNetObjectId, id } = getObserversMapEntry(dotNetHelper);
-  let pendingCallbacks: Map<Element, IntersectionObserverEntry> = new Map();
+  const pendingCallbacks: Map<Element, PendingIntersectionEntry> = new Map();
   let callbackTimeout: ReturnType<typeof setTimeout> | null = null;
   let pendingAlignLocalIndex: number | null = null;
+  let programmaticScrollGeneration = 0;
 
   // Walks `localIndex` siblings forward from spacerBefore to find the rendered child,
   // returning its viewport-relative top measured against the scroll container (or 0 for
@@ -744,7 +751,13 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
   }
 
   function intersectionCallback(entries: IntersectionObserverEntry[]): void {
-    entries.forEach(entry => pendingCallbacks.set(entry.target, entry));
+    // Preserve each entry's ownership across throttled processing.
+    const source = scrollActivity.source;
+    entries.forEach(entry => pendingCallbacks.set(entry.target, {
+      entry,
+      source,
+      programmaticScrollGeneration,
+    }));
 
     if (!callbackTimeout) {
       flushPendingCallbacks();
@@ -843,29 +856,31 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
     observersByDotNetObjectId[id].anchorSnapshot = null;
   }
 
-  function processIntersectionEntries(entries: IntersectionObserverEntry[]): void {
+  function processIntersectionEntries(entries: PendingIntersectionEntry[]): void {
     // Check if the spacers are still in the DOM. They may have been removed if the component was disposed.
     if (!spacerBefore.isConnected || !spacerAfter.isConnected) {
       return;
     }
 
-    const source = scrollActivity.source;
-    if (source === ScrollSource.UserScroll) {
+    if (scrollActivity.source === ScrollSource.UserScroll
+        && entries.some(entry => entry.source === ScrollSource.UserScroll)) {
       // An ongoing scroll re-arms UserScroll every tick (handleUserScroll). Consuming prevents stale activity status.
       scrollActivity.consumeScroll();
     }
 
     // Keep the anchor snapshot fresh on every IO callback so it reflects the current scroll position,
     // not just the last render. Skip while a self-scroll is settling — those callbacks have stale data.
-    const isSelfScroll = source === ScrollSource.AlignToItem || source === ScrollSource.RestoreSnapshot;
+    const isSelfScroll = entries.some(entry => entry.source === ScrollSource.AlignToItem
+      || entry.source === ScrollSource.RestoreSnapshot);
     if (!isSelfScroll) {
       updateAnchorSnapshot();
     }
 
-    const bothSpacersIntersect = entries.some(entry => entry.target === spacerBefore && entry.isIntersecting)
-      && entries.some(entry => entry.target === spacerAfter && entry.isIntersecting);
+    const bothSpacersIntersect = entries.some(({ entry }) => entry.target === spacerBefore && entry.isIntersecting)
+      && entries.some(({ entry }) => entry.target === spacerAfter && entry.isIntersecting);
 
-    const intersectingEntries = entries.filter(entry => {
+    const intersectingEntries = entries.filter(({ entry, source }) => {
+      const isSelfScroll = source === ScrollSource.AlignToItem || source === ScrollSource.RestoreSnapshot;
       if (bothSpacersIntersect && entry.target === spacerAfter) {
         // When both spacers are visible, report only the before spacer to avoid conflicting callbacks.
         return false;
@@ -891,7 +906,9 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
     });
 
     if (intersectingEntries.length === 0) {
-      if (source === ScrollSource.AlignToItem) {
+      if (scrollActivity.source === ScrollSource.AlignToItem
+          && entries.some(entry => entry.source === ScrollSource.AlignToItem
+            && entry.programmaticScrollGeneration === programmaticScrollGeneration)) {
         scrollActivity.clear();
       }
       return;
@@ -903,11 +920,12 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
     rangeBetweenSpacers.setEndBefore(spacerAfter);
     const spacerSeparation = rangeBetweenSpacers.getBoundingClientRect().height / scaleFactor;
 
-    intersectingEntries.forEach((entry): void => {
+    intersectingEntries.forEach(({ entry, source }): void => {
+      const isSelfScroll = source === ScrollSource.AlignToItem || source === ScrollSource.RestoreSnapshot;
       const containerSize = (entry.rootBounds?.height ?? 0) / scaleFactor;
       const reason = source === ScrollSource.UserScroll
         ? SpacerVisibilityReason.UserScroll
-        : (isSelfScroll && (entry.target === spacerBefore || source === ScrollSource.RestoreSnapshot))
+        : isSelfScroll
           ? SpacerVisibilityReason.ProgrammaticScroll
           : SpacerVisibilityReason.ViewportFill;
 
@@ -934,7 +952,9 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
       dotNetHelper.invokeMethodAsync(methodName, spacerSize, spacerSeparation, containerSize, reason);
     });
 
-    if (source === ScrollSource.AlignToItem) {
+    if (scrollActivity.source === ScrollSource.AlignToItem
+        && intersectingEntries.some(entry => entry.source === ScrollSource.AlignToItem
+          && entry.programmaticScrollGeneration === programmaticScrollGeneration)) {
       scrollActivity.clear();
     }
   }
