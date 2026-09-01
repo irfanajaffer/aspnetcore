@@ -925,7 +925,7 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
       const containerSize = (entry.rootBounds?.height ?? 0) / scaleFactor;
       const reason = source === ScrollSource.UserScroll
         ? SpacerVisibilityReason.UserScroll
-        : isSelfScroll
+        : (isSelfScroll && (entry.target === spacerBefore || source === ScrollSource.RestoreSnapshot))
           ? SpacerVisibilityReason.ProgrammaticScroll
           : SpacerVisibilityReason.ViewportFill;
 

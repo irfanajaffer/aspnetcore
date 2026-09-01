@@ -45,6 +45,7 @@ function createVirtualize(): {
   dotNetHelper: any;
   scrollContainer: HTMLElement;
   spacerBefore: HTMLElement;
+  spacerAfter: HTMLElement;
   invokeMethodAsync: jest.Mock;
 } {
   const scrollContainer = document.createElement('div');
@@ -55,6 +56,7 @@ function createVirtualize(): {
   spacerBefore.style.overflowY = 'visible';
   item.style.overflowY = 'visible';
   spacerAfter.style.overflowY = 'visible';
+  Object.defineProperty(spacerAfter, 'offsetHeight', { value: 10 });
   scrollContainer.append(spacerBefore, item, spacerAfter);
   document.body.append(scrollContainer);
 
@@ -67,7 +69,7 @@ function createVirtualize(): {
   };
 
   Virtualize.init(dotNetHelper, spacerBefore, spacerAfter, 0);
-  return { dotNetHelper, scrollContainer, spacerBefore, invokeMethodAsync };
+  return { dotNetHelper, scrollContainer, spacerBefore, spacerAfter, invokeMethodAsync };
 }
 
 beforeEach(() => {
@@ -103,6 +105,22 @@ describe('Virtualize exports', () => {
 });
 
 describe('Virtualize intersection ownership', () => {
+  test('alignment keeps after spacer available for viewport filling', () => {
+    const { dotNetHelper, spacerBefore, spacerAfter, invokeMethodAsync } = createVirtualize();
+    const observer = TestIntersectionObserver.instance;
+
+    observer.trigger(spacerBefore, true);
+    invokeMethodAsync.mockClear();
+
+    Virtualize.beginProgrammaticScroll(dotNetHelper);
+    observer.trigger(spacerAfter, true);
+    jest.advanceTimersByTime(50);
+
+    expect(invokeMethodAsync).toHaveBeenCalledTimes(1);
+    expect(invokeMethodAsync.mock.calls[0][0]).toBe('OnSpacerAfterVisible');
+    expect(invokeMethodAsync.mock.calls[0][4]).toBe(SpacerVisibilityReason.ViewportFill);
+  });
+
   test('same spacer uses latest ownership when coalesced during throttle', () => {
     const { dotNetHelper, scrollContainer, spacerBefore, invokeMethodAsync } = createVirtualize();
     const observer = TestIntersectionObserver.instance;
