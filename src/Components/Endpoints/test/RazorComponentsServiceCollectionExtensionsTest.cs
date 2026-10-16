@@ -79,6 +79,26 @@ public class RazorComponentsServiceCollectionExtensionsTest
         }
     }
 
+    [Fact]
+    public void AddRazorComponentsWithInteractiveServerComponents_UsesHttpNavigationManagerOutsideCircuitScopes()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection().Build());
+        services.AddSingleton<IWebHostEnvironment>(new TestWebHostEnvironment());
+        services.AddRazorComponents()
+            .AddInteractiveServerComponents();
+
+        var serviceProvider = services.BuildServiceProvider();
+        using var scope = serviceProvider.CreateScope();
+
+        // Act
+        var navigationManager = scope.ServiceProvider.GetRequiredService<NavigationManager>();
+
+        // Assert
+        Assert.Equal("HttpNavigationManager", navigationManager.GetType().Name);
+    }
+
     private IEnumerable<Type> SingleRegistrationServiceTypes
     {
         get

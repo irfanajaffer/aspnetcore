@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Endpoints;
@@ -37,6 +38,10 @@ public static class ComponentServiceCollectionExtensions
     public static IServerSideBlazorBuilder AddServerSideBlazor(this IServiceCollection services, Action<CircuitOptions>? configure = null)
     {
         var builder = new DefaultServerSideBlazorBuilder(services);
+        var existingNavigationManager = services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(NavigationManager));
+        var existingJSRuntime = services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IJSRuntime));
+        var existingNavigationInterception = services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(INavigationInterception));
+        var existingScrollToLocationHash = services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IScrollToLocationHash));
 
         services.AddDataProtection();
 
@@ -113,10 +118,30 @@ public static class ComponentServiceCollectionExtensions
         // Standard blazor hosting services implementations
         //
         // These intentionally replace the non-interactive versions included in MVC.
-        services.AddScoped<NavigationManager, RemoteNavigationManager>();
-        services.AddScoped<IJSRuntime, RemoteJSRuntime>();
-        services.AddScoped<INavigationInterception, RemoteNavigationInterception>();
-        services.AddScoped<IScrollToLocationHash, RemoteScrollToLocationHash>();
+        services.AddScoped<RemoteNavigationManager>();
+        services.AddScoped<NavigationManager>(services =>
+            services.GetRequiredService<ICircuitAccessor>().HasCircuitContext
+                || existingNavigationManager is null
+                ? services.GetRequiredService<RemoteNavigationManager>()
+                : (NavigationManager)ResolveService(services, existingNavigationManager));
+        services.AddScoped<RemoteJSRuntime>();
+        services.AddScoped<IJSRuntime>(services =>
+            services.GetRequiredService<ICircuitAccessor>().HasCircuitContext
+                || existingJSRuntime is null
+                ? services.GetRequiredService<RemoteJSRuntime>()
+                : (IJSRuntime)ResolveService(services, existingJSRuntime));
+        services.AddScoped<RemoteNavigationInterception>();
+        services.AddScoped<INavigationInterception>(services =>
+            services.GetRequiredService<ICircuitAccessor>().HasCircuitContext
+                || existingNavigationInterception is null
+                ? services.GetRequiredService<RemoteNavigationInterception>()
+                : (INavigationInterception)ResolveService(services, existingNavigationInterception));
+        services.AddScoped<RemoteScrollToLocationHash>();
+        services.AddScoped<IScrollToLocationHash>(services =>
+            services.GetRequiredService<ICircuitAccessor>().HasCircuitContext
+                || existingScrollToLocationHash is null
+                ? services.GetRequiredService<RemoteScrollToLocationHash>()
+                : (IScrollToLocationHash)ResolveService(services, existingScrollToLocationHash));
         services.TryAddScoped<AuthenticationStateProvider, ServerAuthenticationStateProvider>();
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<CircuitOptions>, CircuitOptionsJSInteropDetailedErrorsConfiguration>());
@@ -130,6 +155,21 @@ public static class ComponentServiceCollectionExtensions
         }
 
         return builder;
+    }
+
+    private static object ResolveService(IServiceProvider services, ServiceDescriptor descriptor)
+    {
+        if (descriptor.ImplementationInstance is not null)
+        {
+            return descriptor.ImplementationInstance;
+        }
+
+        if (descriptor.ImplementationFactory is not null)
+        {
+            return descriptor.ImplementationFactory(services);
+        }
+
+        return ActivatorUtilities.GetServiceOrCreateInstance(services, descriptor.ImplementationType!);
     }
 
     private sealed class DefaultServerSideBlazorBuilder : IServerSideBlazorBuilder

@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Components.Server.BlazorPack;
+using Microsoft.AspNetCore.Components.Server.Circuits;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 
@@ -75,5 +78,56 @@ public class ComponentServiceCollectionExtensionsTest
 
         // Configuring Blazor options is kept separate from the global options.
         Assert.Equal(TimeSpan.FromMinutes(10), globalOptions.Value.HandshakeTimeout);
+    }
+
+    [Fact]
+    public void AddServerSideBlazor_PreservesExistingNavigationManagerOutsideCircuitScopes()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScoped<NavigationManager, TestNavigationManager>();
+        services.AddServerSideBlazor();
+
+        var serviceProvider = services.BuildServiceProvider();
+        using var scope = serviceProvider.CreateScope();
+
+        // Act
+        var navigationManager = scope.ServiceProvider.GetRequiredService<NavigationManager>();
+
+        // Assert
+        Assert.IsType<TestNavigationManager>(navigationManager);
+    }
+
+    [Fact]
+    public void AddServerSideBlazor_UsesRemoteNavigationManagerInsideCircuitScopes()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScoped<NavigationManager, TestNavigationManager>();
+        services.AddServerSideBlazor();
+
+        var serviceProvider = services.BuildServiceProvider();
+        using var scope = serviceProvider.CreateScope();
+        ((DefaultCircuitAccessor)scope.ServiceProvider.GetRequiredService<ICircuitAccessor>()).HasCircuitContext = true;
+
+        // Act
+        var navigationManager = scope.ServiceProvider.GetRequiredService<NavigationManager>();
+
+        // Assert
+        Assert.IsType<RemoteNavigationManager>(navigationManager);
+    }
+
+    private sealed class TestNavigationManager : NavigationManager
+    {
+        public TestNavigationManager()
+        {
+            Initialize("https://example.com/", "https://example.com/");
+        }
+
+        protected override void NavigateToCore(string uri, NavigationOptions options)
+        {
+        }
     }
 }

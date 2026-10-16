@@ -58,10 +58,14 @@ public static class RazorComponentsServiceCollectionExtensions
         services.TryAddSingleton<WebAssemblyComponentSerializer>();
         services.TryAddScoped<EndpointHtmlRenderer>();
         services.TryAddScoped<IComponentPrerenderer>(services => services.GetRequiredService<EndpointHtmlRenderer>());
-        services.TryAddScoped<NavigationManager, HttpNavigationManager>();
-        services.TryAddScoped<IJSRuntime, UnsupportedJavaScriptRuntime>();
-        services.TryAddScoped<INavigationInterception, UnsupportedNavigationInterception>();
-        services.TryAddScoped<IScrollToLocationHash, UnsupportedScrollToLocationHash>();
+        services.TryAddScoped<HttpNavigationManager>();
+        services.TryAddScoped<NavigationManager>(services => services.GetRequiredService<HttpNavigationManager>());
+        services.TryAddScoped<UnsupportedJavaScriptRuntime>();
+        services.TryAddScoped<IJSRuntime>(services => services.GetRequiredService<UnsupportedJavaScriptRuntime>());
+        services.TryAddScoped<UnsupportedNavigationInterception>();
+        services.TryAddScoped<INavigationInterception>(services => services.GetRequiredService<UnsupportedNavigationInterception>());
+        services.TryAddScoped<UnsupportedScrollToLocationHash>();
+        services.TryAddScoped<IScrollToLocationHash>(services => services.GetRequiredService<UnsupportedScrollToLocationHash>());
         services.TryAddScoped<ComponentStatePersistenceManager>();
         services.TryAddScoped(sp => sp.GetRequiredService<ComponentStatePersistenceManager>().State);
         services.TryAddScoped<IErrorBoundaryLogger, PrerenderingErrorBoundaryLogger>();
