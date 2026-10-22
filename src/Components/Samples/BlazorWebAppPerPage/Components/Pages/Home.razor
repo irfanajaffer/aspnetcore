@@ -1,7 +1,67 @@
-﻿@page "/"
+﻿ @page "/"
+@rendermode InteractiveServer
 
 <PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Shadow DOM input binding</h1>
 
-Welcome to your new app.
+<p>
+    Type quickly in each input. Both inputs should retain every character.
+    Bound values update after the server processes each input event; this page adds no artificial processing delay.
+</p>
+
+<h2>Native input (control)</h2>
+<input id="native-input" @bind-value="@NativeValue" @bind-value:event="oninput" />
+<p>Bound value: <span id="native-value">@NativeValue</span></p>
+
+<h2>Shadow DOM input</h2>
+<shadow-input id="shadow-input" @bind-value="@ShadowValue" @bind-value:event="oninput"></shadow-input>
+<p>Bound value: <span id="shadow-value">@ShadowValue</span></p>
+
+<script>
+    if (!customElements.get('shadow-input')) {
+        customElements.define('shadow-input', class extends HTMLElement {
+            static observedAttributes = ['value'];
+
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' }).innerHTML = '<input type="text" aria-label="Shadow DOM input">';
+            }
+
+            get value() {
+                return this.shadowRoot.querySelector('input').value;
+            }
+
+            set value(value) {
+                this.shadowRoot.querySelector('input').value = value ?? '';
+            }
+
+            attributeChangedCallback(name, oldValue, newValue) {
+                this.value = newValue;
+            }
+        });
+    }
+</script>
+
+@code {
+    private string _nativeValue = string.Empty;
+    private string _shadowValue = string.Empty;
+
+    private string NativeValue
+    {
+        get => _nativeValue;
+        set
+        {
+            _nativeValue = value;
+        }
+    }
+
+    private string ShadowValue
+    {
+        get => _shadowValue;
+        set
+        {
+            _shadowValue = value;
+        }
+    }
+}
