@@ -6099,14 +6099,14 @@ public class RendererTest
         var componentId = renderer.AssignRootComponentId(component);
         await renderer.RenderRootComponentAsync(componentId);
         renderer.Dispose();
-        
+
         await component.DispatchAsync(new InvalidTimeZoneException("Test exception"));
-        
+
         Assert.Empty(renderer.HandledExceptions);
     }
 
     [Fact]
-    public async Task DispatchExceptionAsync_AfterComponentIsRemoved_DoesNotThrow()
+    public async Task DispatchExceptionAsync_AfterComponentIsRemoved_Throws()
     {
         var renderer = new TestRenderer();
         var component = new DispatchExceptionComponent();
@@ -6114,7 +6114,22 @@ public class RendererTest
         await renderer.RenderRootComponentAsync(componentId);
         await renderer.Dispatcher.InvokeAsync(() => renderer.RemoveRootComponent(componentId));
 
-        await component.DispatchAsync(new InvalidTimeZoneException("Test exception"));
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() => component.DispatchAsync(new InvalidTimeZoneException("Test exception")));
+
+        Assert.Equal($"The renderer does not have a component with ID {componentId}.", exception.Message);
+        Assert.Empty(renderer.HandledExceptions);
+    }
+
+    [Fact]
+    public async Task DispatchExceptionAsync_DuringRendererDisposal_DoesNotThrow()
+    {
+        var renderer = new TestRenderer();
+        renderer.ShouldHandleExceptions = true;
+        var component = new DispatchExceptionOnDisposeComponent();
+        var componentId = renderer.AssignRootComponentId(component);
+        await renderer.RenderRootComponentAsync(componentId);
+
+        renderer.Dispose();
 
         Assert.Empty(renderer.HandledExceptions);
     }
@@ -6122,6 +6137,12 @@ public class RendererTest
     private class DispatchExceptionComponent : ComponentBase
     {
         public Task DispatchAsync(Exception exception) => DispatchExceptionAsync(exception);
+    }
+
+    private class DispatchExceptionOnDisposeComponent : ComponentBase, IAsyncDisposable
+    {
+        public ValueTask DisposeAsync()
+            => new(DispatchExceptionAsync(new InvalidTimeZoneException("Test exception")));
     }
 
     private class ComponentThatAwaitsTask : ComponentBase
