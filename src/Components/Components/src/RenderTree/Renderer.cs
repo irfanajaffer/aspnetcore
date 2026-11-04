@@ -1187,7 +1187,13 @@ public abstract partial class Renderer : IDisposable, IAsyncDisposable
             return;
         }
 
-        HandleExceptionViaErrorBoundary(exception, GetRequiredComponentState(componentId));
+        var componentState = GetOptionalComponentState(componentId);
+        if (componentState is null)
+        {
+            return;
+        }
+
+        HandleExceptionViaErrorBoundary(exception, componentState);
     }
 
     /// <summary>
