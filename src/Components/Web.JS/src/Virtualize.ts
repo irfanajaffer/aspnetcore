@@ -671,7 +671,23 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
   }
 
   function handleScroll(): void {
-    if (convergence.isConverging() || scrollActivity.consumeIgnoreScroll()) {
+    if (convergence.isConverging()) {
+      return;
+    }
+
+    if (scrollActivity.consumeIgnoreScroll()) {
+      const selfScrollInProgress = scrollActivity.source === ScrollSource.AlignToItem
+        || scrollActivity.source === ScrollSource.RestoreSnapshot;
+      const programmaticWorkFinished = programmaticScrollState !== ProgrammaticScrollState.PendingAlignment
+        && pendingAlignLocalIndex === null
+        && !pendingScrollCorrection;
+
+      if (selfScrollInProgress && programmaticWorkFinished) {
+        // When a programmatic scroll lands with both spacers outside the observer range, the expected
+        // IO callback may never arrive to clear the self-scroll state. Clear it here after ignoring
+        // the synthetic scroll event so subsequent manual scrolling can resume loading items.
+        scrollActivity.clear();
+      }
       return;
     }
 
