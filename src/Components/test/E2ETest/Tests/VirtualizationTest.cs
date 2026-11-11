@@ -4659,6 +4659,47 @@ public class VirtualizationTest : ServerTestBase<ToggleExecutionModeServerFixtur
             $"clientHeight: {clientHeightBeforeSecondAppend}");
     }
 
+    [Fact]
+    public void AnchorMode_End_VariableHeight_AppendThenScrollToEnd_ScrollingUpLoadsEarlierItems()
+    {
+        MountAnchorModeComponent("2", variableHeight: true);
+
+        var container = Browser.Exists(By.Id("scroll-container"));
+        var js = (IJavaScriptExecutor)Browser;
+
+        Browser.Exists(By.Id("set-overscan-5")).Click();
+        Browser.Contains("Overscan 5", () => Browser.Exists(By.Id("status")).Text);
+        WaitForRenderToSettle(container, js);
+
+        ScrollMidListAndWaitForRender(container, js);
+
+        for (var i = 0; i < 9; i++)
+        {
+            Browser.Exists(By.Id("append-one-item")).Click();
+            Browser.Contains("Appended 1 item", () => Browser.Exists(By.Id("status")).Text);
+        }
+
+        SetScrollTargetIndex(1008);
+        Browser.Exists(By.Id("scroll-to-item")).Click();
+        WaitForScrollStatus("Completed: 1008");
+        Browser.True(() => GetTopRenderedIndex(js) >= 995,
+            $"Expected the post-jump window to be at the tail, but top rendered index was {GetTopRenderedIndex(js)}. " +
+            GetSpacerIntersectionState(js, container));
+
+        var scrollTopAtEnd = GetScrollTop(js, container);
+        var targetScrollTop = Math.Max(0, (int)scrollTopAtEnd - 6000);
+        ScrollUntil(js, container, () => ScrollContainer(js, container, targetScrollTop),
+            st => st <= scrollTopAtEnd - 3000,
+            $"scrollTop <= {scrollTopAtEnd - 3000} after dragging away from the end");
+        WaitForRenderToSettle(container, js);
+
+        Browser.True(() => GetTopRenderedIndex(js) > -1 && GetTopRenderedIndex(js) < 950,
+            TimeSpan.FromSeconds(10),
+            $"After scrolling upward from a ScrollToItemAsync jump in End mode, earlier variable-height items " +
+            $"should render instead of leaving the tail window stranded. top={GetTopRenderedIndex(js)}; " +
+            GetSpacerIntersectionState(js, container));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

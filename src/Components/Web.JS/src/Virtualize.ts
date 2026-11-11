@@ -678,11 +678,12 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
     const selfScrollInProgress = scrollActivity.source === ScrollSource.AlignToItem
       || scrollActivity.source === ScrollSource.RestoreSnapshot;
     if (selfScrollInProgress) {
-      return;
+      // Scrollbar dragging can surface as a plain scroll event with no preceding wheel/touch/pointer input.
+      // Once the programmatic scroll's own event has been ignored, treat subsequent movement as user intent.
+      interruptProgrammaticScroll();
     }
     scrollActivity.source = ScrollSource.UserScroll;
 
-    // A user scroll is the only thing that (re)sets follow state (self-scrolls early-return above).
     if (anchorModeIs.beginning || topTracking.following) {
       topTracking.following = isAtScrollTop();
     }
