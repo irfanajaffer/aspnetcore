@@ -46,6 +46,8 @@ public sealed class Virtualize<TItem> : ComponentBase, IVirtualizeJsCallbacks, I
 
     private float _lastSetItemSize;
 
+    private float _lastRenderedItemSize;
+
     private IEnumerable<TItem>? _loadedItems;
 
     private TItem? _previousFirstLoadedItem;
@@ -563,10 +565,13 @@ public sealed class Virtualize<TItem> : ComponentBase, IVirtualizeJsCallbacks, I
             throw oldRefreshException;
         }
 
+        _lastRenderedItemSize = GetItemHeight();
+
         builder.OpenElement(0, SpacerElement);
         builder.AddAttribute(1, "data-blazor-virtualize-reserved-height", GetSpacerHeightPx(_itemsBefore));
         builder.AddAttribute(2, "aria-hidden", "true");
-        builder.AddElementReferenceCapture(3, elementReference => _spacerBefore = elementReference);
+        builder.AddAttribute(3, "data-blazor-virtualize-item-size", _lastRenderedItemSize);
+        builder.AddElementReferenceCapture(4, elementReference => _spacerBefore = elementReference);
         builder.CloseElement();
 
         var lastItemIndex = Math.Min(_itemsBefore + _visibleItemCapacity, _itemCount);
@@ -858,7 +863,8 @@ public sealed class Virtualize<TItem> : ComponentBase, IVirtualizeJsCallbacks, I
 
     private float GetEffectiveItemSizeForStaleSpacer()
     {
-        var effectiveItemSize = GetItemHeight();
+        // The observed spacer still uses the estimate from the last render, not this callback's new measurements.
+        var effectiveItemSize = _lastRenderedItemSize;
         if (effectiveItemSize <= 0 || float.IsNaN(effectiveItemSize) || float.IsInfinity(effectiveItemSize))
         {
             effectiveItemSize = _itemSize > 0 ? _itemSize : ItemSize;

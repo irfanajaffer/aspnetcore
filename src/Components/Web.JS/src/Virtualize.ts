@@ -116,6 +116,9 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
     ['data-blazor-virtualize-loop-breaker-transform', 'transform', (n: number) => `translateY(${n}px)`],
   ] as const;
   const layoutAttrNames = layoutAttrs.map(([a]) => a);
+  const itemSizeAttrName = 'data-blazor-virtualize-item-size';
+  let appliedItemSize = Number(spacerBefore.getAttribute(itemSizeAttrName));
+  let userScrollTriggeredRender = false;
   function applyLayoutAttrs(el: HTMLElement): void {
     ensureBaseStyles(el);
     for (const [attr, styleProp, format] of layoutAttrs) {
@@ -131,6 +134,18 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
 
   // Apply layout attributes before the MutationObserver starts catching changes.
   function applyLayoutAttrsBetweenSpacers(): void {
+    const itemSize = Number(spacerBefore.getAttribute(itemSizeAttrName));
+    const adjustScroll = userScrollTriggeredRender && itemSize > 0 && appliedItemSize > 0 && itemSize !== appliedItemSize;
+    let adjustedScrollTop: number | null = null;
+    if (adjustScroll) {
+      // Rebase before applying the new spacer sizes, which can otherwise clamp the viewport to the tail.
+      const scaleFactor = getScaleFactor(spacerBefore, spacerAfter);
+      const viewportTop = scrollContainer
+        ? scrollContainer.getBoundingClientRect().top + scrollContainer.clientTop * scaleFactor
+        : 0;
+      const spacerOffset = (spacerBefore.getBoundingClientRect().top - viewportTop) / scaleFactor;
+      adjustedScrollTop = scrollElement.scrollTop + spacerOffset * (1 - itemSize / appliedItemSize);
+    }
     for (let el: Element | null = spacerBefore;
          el && el !== spacerAfter.nextElementSibling;
          el = el.nextElementSibling) {
@@ -138,6 +153,12 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
         applyLayoutAttrs(el as HTMLElement);
       }
     }
+    if (adjustedScrollTop !== null) {
+      scrollElement.scrollTop = adjustedScrollTop;
+      scrollActivity.ignoreNextScroll();
+    }
+    appliedItemSize = itemSize;
+    userScrollTriggeredRender = false;
   }
   applyLayoutAttrsBetweenSpacers();
 
@@ -168,7 +189,7 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
   }
   const spacerObserverOptions: MutationObserverInit = {
     attributes: true,
-    attributeFilter: layoutAttrNames,
+    attributeFilter: [...layoutAttrNames, itemSizeAttrName],
   };
   mutationObserver.observe(spacerBefore, spacerObserverOptions);
   mutationObserver.observe(spacerAfter, spacerObserverOptions);
@@ -301,6 +322,7 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
 
   // Called by C# at the start of a programmatic ScrollToItem, before the align scroll itself.
   function beginProgrammaticScroll(): void {
+    userScrollTriggeredRender = false;
     stopConvergenceObserving();
     clearTopFollow();
     clearBottomFollow();
@@ -1027,6 +1049,7 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
       if (reason !== SpacerVisibilityReason.ProgrammaticScroll) {
         // So that RefreshObservedElements can skip item observation (avoids layout interference drift).
         scrollTriggeredRender = true;
+        userScrollTriggeredRender ||= reason === SpacerVisibilityReason.UserScroll;
         if (spacer.offsetHeight > 0) {
           nativeAnchoring.suspend('slide');
         }

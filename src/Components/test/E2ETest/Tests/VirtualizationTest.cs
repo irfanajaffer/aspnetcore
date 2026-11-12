@@ -7055,6 +7055,53 @@ public class VirtualizationTest : ServerTestBase<ToggleExecutionModeServerFixtur
     }
 
     [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void ScrollToItem_AfterAppendingAtEnd_CanScrollToEarlierItems(bool fixedHeight, bool append)
+    {
+        Browser.MountTestComponent<VirtualizationAppendAndScrollToEnd>();
+        var js = (IJavaScriptExecutor)Browser;
+        var container = Browser.Exists(By.Id("scroll-container"));
+
+        if (fixedHeight)
+        {
+            Browser.Exists(By.Id("fixed-height")).Click();
+        }
+
+        Browser.Exists(By.Id("load-list")).Click();
+        Browser.True(() => GetBottomRenderedIndex(js) == 9999 && IsScrolledToBottom(js, container));
+        ScrollContainerWithWheelTo(js, container, (int)(GetMaximumScrollTop(js, container) / 2));
+        Browser.True(() => GetTopRenderedIndex(js) is > 1000 and < 9000
+            && ViewportEdgeCoveredByRealItem(js, "top")
+            && ViewportEdgeCoveredByRealItem(js, "bottom"));
+
+        if (append)
+        {
+            for (var i = 1; i <= 9; i++)
+            {
+                Browser.Exists(By.Id("append-item")).Click();
+                Browser.Equal((10_000 + i).ToString(CultureInfo.InvariantCulture),
+                    () => Browser.Exists(By.Id("item-count")).Text);
+            }
+        }
+
+        var lastIndex = append ? 10008 : 9999;
+        Browser.Exists(By.Id("scroll-to-end")).Click();
+        WaitForScrollStatus($"Completed: {lastIndex}");
+        Browser.True(() => GetBottomRenderedIndex(js) == lastIndex && IsScrolledToBottom(js, container));
+        var firstTailIndex = Convert.ToInt32(container.FindElement(By.CssSelector(".item")).GetDomAttribute("data-index"), CultureInfo.InvariantCulture);
+        var scrollTop = GetScrollTop(js, container);
+        ScrollContainerWithWheelTo(js, container, checked((int)scrollTop - 6000));
+
+        Browser.True(() => GetTopRenderedIndex(js) < firstTailIndex
+            && ViewportEdgeCoveredByRealItem(js, "top")
+            && ViewportEdgeCoveredByRealItem(js, "bottom"),
+            TimeSpan.FromSeconds(10),
+            "Scrolling upward past the rendered tail must load earlier items and cover both viewport edges.");
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void ScrollToItem_UserSmallScrollWithinOverscanDuringProviderFetch_UserScrollWins(bool variableHeight)
