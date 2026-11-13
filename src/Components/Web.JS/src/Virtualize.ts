@@ -119,6 +119,32 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
   const itemSizeAttrName = 'data-blazor-virtualize-item-size';
   let appliedItemSize = Number(spacerBefore.getAttribute(itemSizeAttrName));
   let userScrollTriggeredRender = false;
+  let lastKnownGoodScrollTop = scrollElement.scrollTop;
+
+  function hasRenderedContentCoveringViewport(): boolean {
+    const viewportTop = scrollContainer
+      ? scrollContainer.getBoundingClientRect().top
+      : 0;
+    const viewportBottom = scrollContainer
+      ? scrollContainer.getBoundingClientRect().bottom
+      : scrollElement.getBoundingClientRect().bottom;
+
+    for (let el = spacerBefore.nextElementSibling; el && el !== spacerAfter; el = el.nextElementSibling) {
+      const rect = (el as HTMLElement).getBoundingClientRect();
+      if (rect.bottom > viewportTop && rect.top < viewportBottom) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function updateLastKnownGoodScrollTop(): void {
+    if (hasRenderedContentCoveringViewport()) {
+      lastKnownGoodScrollTop = scrollElement.scrollTop;
+    }
+  }
+
   function applyLayoutAttrs(el: HTMLElement): void {
     ensureBaseStyles(el);
     for (const [attr, styleProp, format] of layoutAttrs) {
@@ -157,7 +183,15 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
       scrollElement.scrollTop = adjustedScrollTop;
       scrollActivity.ignoreNextScroll();
     }
+ if (userScrollTriggeredRender && !hasRenderedContentCoveringViewport()) {
+      scrollElement.scrollTop = lastKnownGoodScrollTop;
+      scrollActivity.ignoreNextScroll();
+      reobserveSpacers();
+      userScrollTriggeredRender = false;
+      return;
+    }
     appliedItemSize = itemSize;
+updateLastKnownGoodScrollTop();
     userScrollTriggeredRender = false;
   }
   applyLayoutAttrsBetweenSpacers();
@@ -505,7 +539,7 @@ function init(dotNetHelper: DotNet.DotNetObject, spacerBefore: HTMLElement, spac
     updateAnchorSnapshot();
 
   }
-
+updateLastKnownGoodScrollTop();
   // Corrects scrollTop after a render that shifted content, using the snapshot
   // saved by updateAnchorSnapshot() during the previous render cycle.
   function restoreAnchorForShift(): void {

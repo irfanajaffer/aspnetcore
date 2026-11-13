@@ -89,7 +89,10 @@ public sealed class Virtualize<TItem> : ComponentBase, IVirtualizeJsCallbacks, I
     internal bool _pendingScrollToBottom;
 
     private VirtualizeAnchorMode _lastRenderedAnchorMode;
-
+    private bool _hasLastStableDistribution;
+    private int _lastStableItemsBefore;
+    private int _lastStableVisibleItemCapacity;
+    private int _lastStableUnusedItemCapacity;
     // When true, OnAfterRenderAsync tells JS to restore the anchor snapshot
     // so the viewport stays stable after a prepend or append.
     private bool _pendingAnchorRestore;
@@ -674,6 +677,7 @@ public sealed class Virtualize<TItem> : ComponentBase, IVirtualizeJsCallbacks, I
         }
 
         CalculateItemDistribution(spacerSize, spacerSeparation, containerSize, out _, out _, out _);
+
     }
 
     private void CancelInFlightScrollForUserInteraction()
@@ -721,6 +725,13 @@ public sealed class Virtualize<TItem> : ComponentBase, IVirtualizeJsCallbacks, I
         }
 
         CalculateItemDistribution(spacerSize, spacerSeparation, containerSize, out var itemsBefore, out var visibleItemCapacity, out var unusedItemCapacity);
+        EnsureViewportCoverageFromBefore(ref itemsBefore, ref visibleItemCapacity, ref unusedItemCapacity, containerSize);
+        if (reason == SpacerVisibilityReason.UserScroll
+              && TryRestoreStableDistributionForBlankViewport(spacerSeparation, ref itemsBefore, ref visibleItemCapacity, ref unusedItemCapacity))
+        {
+            UpdateItemDistribution(itemsBefore, visibleItemCapacity, unusedItemCapacity);
+            return;
+        }
 
         if (_initialIndex.IsPositioning)
         {
@@ -764,6 +775,7 @@ public sealed class Virtualize<TItem> : ComponentBase, IVirtualizeJsCallbacks, I
             return;
         }
         var hadNewMeasurements = CalculateItemDistribution(spacerSize, spacerSeparation, containerSize, out var itemsAfter, out var visibleItemCapacity, out var unusedItemCapacity);
+        EnsureViewportCoverageFromAfter(ref visibleItemCapacity, ref unusedItemCapacity, containerSize);
 
         if (_initialIndex.IsPositioning)
         {
@@ -775,7 +787,12 @@ public sealed class Virtualize<TItem> : ComponentBase, IVirtualizeJsCallbacks, I
         }
 
         var itemsBefore = Math.Max(0, _itemCount - itemsAfter - visibleItemCapacity);
-
+        if (reason == SpacerVisibilityReason.UserScroll
+             && TryRestoreStableDistributionForBlankViewport(spacerSeparation, ref itemsBefore, ref visibleItemCapacity, ref unusedItemCapacity))
+        {
+            UpdateItemDistribution(itemsBefore, visibleItemCapacity, unusedItemCapacity);
+            return;
+        }
         // Slide window down by at least one if spacer is visible but position unchanged.
         if (_lastRenderedItemCount > 0 && itemsBefore == _itemsBefore && itemsBefore < _itemCount - visibleItemCapacity)
         {
@@ -929,6 +946,75 @@ public sealed class Virtualize<TItem> : ComponentBase, IVirtualizeJsCallbacks, I
         return hadNewMeasurements;
     }
 
+    private bool TryRestoreStableDistributionForBlankViewport(
+        float spacerSeparation,
+        ref int itemsBefore,
+        ref int visibleItemCapacity,
+        ref int unusedItemCapacity)
+    {
+        if (!_hasLastStableDistribution || _itemCount == 0)
+        {
+            return false;
+        }
+
+        var blankViewportCandidate =
+            spacerSeparation <= 0
+            || visibleItemCapacity <= 0
+            || (_lastRenderedItemCount == 0 && _lastRenderedPlaceholderCount == 0);
+
+        if (!blankViewportCandidate)
+        {
+            return false;
+        }
+
+        itemsBefore = _lastStableItemsBefore;
+        visibleItemCapacity = _lastStableVisibleItemCapacity;
+        unusedItemCapacity = _lastStableUnusedItemCapacity;
+        _skipNextDistributionRefresh = false;
+
+        return true;
+    }
+    private void EnsureViewportCoverageFromBefore(
+         ref int itemsBefore,
+         ref int visibleItemCapacity,
+         ref int unusedItemCapacity,
+         float containerSize)
+    {
+        var effectiveItemSize = GetEffectiveItemSizeForStaleSpacer();
+        var minimumViewportCapacity = Math.Max(1, (int)Math.Ceiling(containerSize / effectiveItemSize));
+        var minimumRenderCapacity = Math.Min(
+            GetMaximumItemCapacity(),
+            minimumViewportCapacity + 2 * OverscanCount);
+
+        if (visibleItemCapacity < minimumRenderCapacity)
+        {
+            visibleItemCapacity = minimumRenderCapacity;
+            unusedItemCapacity = 0;
+        }
+
+        if (itemsBefore + visibleItemCapacity > _itemCount)
+        {
+            itemsBefore = Math.Max(0, _itemCount - visibleItemCapacity);
+        }
+    }
+    private void EnsureViewportCoverageFromAfter(
+           ref int visibleItemCapacity,
+           ref int unusedItemCapacity,
+           float containerSize)
+    {
+        var effectiveItemSize = GetEffectiveItemSizeForStaleSpacer();
+        var minimumViewportCapacity = Math.Max(1, (int)Math.Ceiling(containerSize / effectiveItemSize));
+        var minimumRenderCapacity = Math.Min(
+            GetMaximumItemCapacity(),
+            minimumViewportCapacity + 2 * OverscanCount);
+
+        if (visibleItemCapacity < minimumRenderCapacity)
+        {
+            visibleItemCapacity = minimumRenderCapacity;
+            unusedItemCapacity = 0;
+        }
+    }
+
     private int GetMaximumItemCapacity()
     {
         var maxItemCount = AppContext.GetData("Microsoft.AspNetCore.Components.Web.Virtualization.Virtualize.MaxItemCount") switch
@@ -964,6 +1050,10 @@ public sealed class Virtualize<TItem> : ComponentBase, IVirtualizeJsCallbacks, I
 
     private void UpdateItemDistribution(int itemsBefore, int visibleItemCapacity, int unusedItemCapacity)
     {
+        if (_lastRenderedItemCount > 0 && _lastRenderedPlaceholderCount == 0 && _visibleItemCapacity > 0)
+        {
+            RememberStableDistribution();
+        }
         // If the itemcount just changed to a lower number, and we're already scrolled past the end of the new
         // reduced set of items, clamp the scroll position to the new maximum
         if (itemsBefore + visibleItemCapacity > _itemCount)
@@ -1002,6 +1092,14 @@ public sealed class Virtualize<TItem> : ComponentBase, IVirtualizeJsCallbacks, I
                 }
             }
         }
+    }
+
+    private void RememberStableDistribution()
+    {
+        _hasLastStableDistribution = true;
+        _lastStableItemsBefore = _itemsBefore;
+        _lastStableVisibleItemCapacity = _visibleItemCapacity;
+        _lastStableUnusedItemCapacity = _unusedItemCapacity;
     }
 
     private ValueTask RefreshDataCoreAsync(
