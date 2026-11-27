@@ -25,7 +25,7 @@ public static class BindConverter
     private static readonly object BoxedTrue = true;
     private static readonly object BoxedFalse = false;
 
-    private delegate object? BindFormatter<T>(T value, CultureInfo? culture);
+    internal delegate object? BindFormatter<T>(T value, CultureInfo? culture);
 
     internal delegate bool BindParser<T>(object? obj, CultureInfo? culture, [MaybeNullWhen(false)] out T value);
     internal delegate bool BindParserWithFormat<T>(object? obj, CultureInfo? culture, string? format, [MaybeNullWhen(false)] out T value);
@@ -1657,22 +1657,13 @@ public static class BindConverter
         CultureInfo? _,
         [MaybeNullWhen(false)] out T value)
     {
-        var text = (string?)obj;
-        if (string.IsNullOrEmpty(text))
-        {
-            value = default!;
-            return true;
-        }
-
-        if (!Enum.TryParse(typeof(T), text, out var converted)
-            || converted is null
-            || !Enum.IsDefined(typeof(T), converted))
+        if (!TryConvertToEnumCore(typeof(T), obj, out var converted))
         {
             value = default;
             return false;
         }
 
-        value = (T)converted;
+        value = converted is null ? default! : (T)converted;
         return true;
     }
 
@@ -1681,23 +1672,35 @@ public static class BindConverter
         CultureInfo? _,
         [MaybeNullWhen(false)] out T value)
     {
-        var text = (string?)obj;
-        if (string.IsNullOrEmpty(text))
-        {
-            value = default!;
-            return true;
-        }
-
         var underlyingType = Nullable.GetUnderlyingType(typeof(T))!;
-        if (!Enum.TryParse(underlyingType, text, out var converted)
-            || converted is null
-            || !Enum.IsDefined(underlyingType, converted))
+        if (!TryConvertToEnumCore(underlyingType, obj, out var converted))
         {
             value = default;
             return false;
         }
 
-        value = (T)converted;
+        value = converted is null ? default! : (T)converted;
+        return true;
+    }
+
+    private static bool TryConvertToEnumCore(Type enumType, object? obj, out object? value)
+    {
+        var text = (string?)obj;
+        if (string.IsNullOrEmpty(text))
+        {
+            value = null;
+            return true;
+        }
+
+        if (!Enum.TryParse(enumType, text, out var converted)
+            || converted is null
+            || !Enum.IsDefined(enumType, converted))
+        {
+            value = null;
+            return false;
+        }
+
+        value = converted;
         return true;
     }
 
@@ -1714,8 +1717,10 @@ public static class BindConverter
         return converter(obj, culture, out value);
     }
 
-    private static class FormatterDelegateCache
+    internal static class FormatterDelegateCache
     {
+        private delegate object? BoxedBindFormatter(object? value, CultureInfo? culture);
+
         private static readonly ConcurrentDictionary<Type, Delegate> _cache = new ConcurrentDictionary<Type, Delegate>();
 
         static FormatterDelegateCache()
@@ -1731,15 +1736,11 @@ public static class BindConverter
         [UnconditionalSuppressMessage(
             "ReflectionAnalysis",
             "IL2060:MakeGenericMethod",
-            Justification = "The referenced methods don't have any DynamicallyAccessedMembers annotations. See https://github.com/mono/linker/issues/1727")]
-        [UnconditionalSuppressMessage(
-            "ReflectionAnalysis",
-            "IL2075:MakeGenericMethod",
-            Justification = "The referenced methods don't have any DynamicallyAccessedMembers annotations. See https://github.com/mono/linker/issues/1727")]
+            Justification = "MakeArrayFormatter is only invoked via MakeGenericMethod when dynamic code is supported; _makeArrayFormatter is cached for perf.")]
         [UnconditionalSuppressMessage(
             "ReflectionAnalysis",
             "IL2076:MakeGenericMethod",
-            Justification = "The referenced methods don't have any DynamicallyAccessedMembers annotations. See https://github.com/mono/linker/issues/1727")]
+            Justification = "MakeArrayFormatter requires DynamicallyAccessedMemberTypes.All on the element type, which cannot be statically propagated from T[].")]
         public static BindFormatter<T> Get<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>()
         {
             if (!_cache.TryGetValue(typeof(T), out var formatter))
@@ -1838,15 +1839,22 @@ public static class BindConverter
                 {
                     formatter = (BindFormatter<TimeOnly?>)FormatNullableTimeOnlyValueCore;
                 }
-                else if (typeof(T).IsEnum || Nullable.GetUnderlyingType(typeof(T)) is Type { IsEnum: true } innerType)
+                else if (typeof(T).IsEnum || Nullable.GetUnderlyingType(typeof(T)) is Type { IsEnum: true })
                 {
                     formatter = (BindFormatter<T>)FormatEnumValueCore<T>;
                 }
                 else if (typeof(T).IsArray)
                 {
-                    var method = _makeArrayFormatter ??= typeof(FormatterDelegateCache).GetMethod(nameof(MakeArrayFormatter), BindingFlags.NonPublic | BindingFlags.Static)!;
-                    var elementType = typeof(T).GetElementType()!;
-                    formatter = (Delegate)method.MakeGenericMethod(elementType).Invoke(null, null)!;
+                    if (RuntimeFeature.IsDynamicCodeSupported)
+                    {
+                        var method = _makeArrayFormatter ??= typeof(FormatterDelegateCache).GetMethod(nameof(MakeArrayFormatter), BindingFlags.NonPublic | BindingFlags.Static)!;
+                        var elementType = typeof(T).GetElementType()!;
+                        formatter = (Delegate)method.MakeGenericMethod(elementType).Invoke(null, null)!;
+                    }
+                    else
+                    {
+                        formatter = MakeArrayFormatterDynamicCodeSafe<T>();
+                    }
                 }
                 else
                 {
@@ -1889,21 +1897,173 @@ public static class BindConverter
             }
         }
 
-        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "We expect unknown underlying types are configured by application code to be retained.")]
+        internal static BindFormatter<T> MakeArrayFormatterDynamicCodeSafe<T>()
+        {
+            var elementFormatter = GetBoxedFormatter(typeof(T).GetElementType()!);
+            return FormatArrayValue;
+
+            string? FormatArrayValue(T value, CultureInfo? culture)
+                => FormatBoxedArray((Array)(object)value!, culture, elementFormatter);
+        }
+
+        [UnconditionalSuppressMessage(
+            "ReflectionAnalysis",
+            "IL2067:UnrecognizedReflectionPattern",
+            Justification = "The element type of T[] cannot statically inherit DynamicallyAccessedMemberTypes.All from T[]. Unknown underlying types used with TypeConverter are expected to be retained by application code.")]
+        private static BoxedBindFormatter GetBoxedFormatter(Type type)
+        {
+            if (type == typeof(string))
+            {
+                return WrapFormatter<string?>(FormatStringValueCore);
+            }
+            if (type == typeof(bool))
+            {
+                return WrapFormatter<bool>(FormatBoolValueCore);
+            }
+            if (type == typeof(bool?))
+            {
+                return WrapFormatter<bool?>(FormatNullableBoolValueCore);
+            }
+            if (type == typeof(int))
+            {
+                return WrapFormatter<int>(FormatIntValueCore);
+            }
+            if (type == typeof(int?))
+            {
+                return WrapFormatter<int?>(FormatNullableIntValueCore);
+            }
+            if (type == typeof(long))
+            {
+                return WrapFormatter<long>(FormatLongValueCore);
+            }
+            if (type == typeof(long?))
+            {
+                return WrapFormatter<long?>(FormatNullableLongValueCore);
+            }
+            if (type == typeof(short))
+            {
+                return WrapFormatter<short>(FormatShortValueCore);
+            }
+            if (type == typeof(short?))
+            {
+                return WrapFormatter<short?>(FormatNullableShortValueCore);
+            }
+            if (type == typeof(float))
+            {
+                return WrapFormatter<float>(FormatFloatValueCore);
+            }
+            if (type == typeof(float?))
+            {
+                return WrapFormatter<float?>(FormatNullableFloatValueCore);
+            }
+            if (type == typeof(double))
+            {
+                return WrapFormatter<double>(FormatDoubleValueCore);
+            }
+            if (type == typeof(double?))
+            {
+                return WrapFormatter<double?>(FormatNullableDoubleValueCore);
+            }
+            if (type == typeof(decimal))
+            {
+                return WrapFormatter<decimal>(FormatDecimalValueCore);
+            }
+            if (type == typeof(decimal?))
+            {
+                return WrapFormatter<decimal?>(FormatNullableDecimalValueCore);
+            }
+            if (type == typeof(DateTime))
+            {
+                return WrapFormatter<DateTime>(FormatDateTimeValueCore);
+            }
+            if (type == typeof(DateTime?))
+            {
+                return WrapFormatter<DateTime?>(FormatNullableDateTimeValueCore);
+            }
+            if (type == typeof(DateTimeOffset))
+            {
+                return WrapFormatter<DateTimeOffset>(FormatDateTimeOffsetValueCore);
+            }
+            if (type == typeof(DateTimeOffset?))
+            {
+                return WrapFormatter<DateTimeOffset?>(FormatNullableDateTimeOffsetValueCore);
+            }
+            if (type == typeof(DateOnly))
+            {
+                return WrapFormatter<DateOnly>(FormatDateOnlyValueCore);
+            }
+            if (type == typeof(DateOnly?))
+            {
+                return WrapFormatter<DateOnly?>(FormatNullableDateOnlyValueCore);
+            }
+            if (type == typeof(TimeOnly))
+            {
+                return WrapFormatter<TimeOnly>(FormatTimeOnlyValueCore);
+            }
+            if (type == typeof(TimeOnly?))
+            {
+                return WrapFormatter<TimeOnly?>(FormatNullableTimeOnlyValueCore);
+            }
+            if (type.IsEnum || Nullable.GetUnderlyingType(type) is Type { IsEnum: true })
+            {
+                return static (value, _) => value?.ToString();
+            }
+            if (type.IsArray)
+            {
+                var elementFormatter = GetBoxedFormatter(type.GetElementType()!);
+                return (value, culture) => FormatBoxedArray((Array)value!, culture, elementFormatter);
+            }
+
+            return MakeTypeConverterBoxedFormatter(type);
+        }
+
+        private static BoxedBindFormatter WrapFormatter<T>(BindFormatter<T> formatter)
+            => (value, culture) => formatter((T)value!, culture);
+
+        private static string FormatBoxedArray(Array array, CultureInfo? culture, BoxedBindFormatter elementFormatter)
+        {
+            if (array.Length == 0)
+            {
+                return "[]";
+            }
+
+            var builder = new StringBuilder("[\"");
+            builder.Append(JsonEncodedText.Encode(elementFormatter(array.GetValue(0), culture)?.ToString() ?? string.Empty).Value);
+            builder.Append('\"');
+
+            for (var i = 1; i < array.Length; i++)
+            {
+                builder.Append(", \"");
+                builder.Append(JsonEncodedText.Encode(elementFormatter(array.GetValue(i), culture)?.ToString() ?? string.Empty).Value);
+                builder.Append('\"');
+            }
+
+            builder.Append(']');
+
+            return builder.ToString();
+        }
+
         private static BindFormatter<T> MakeTypeConverterFormatter<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>()
         {
-            var typeConverter = TypeDescriptor.GetConverter(typeof(T));
+            var boxedFormatter = MakeTypeConverterBoxedFormatter(typeof(T));
+            return (value, culture) => boxedFormatter(value, culture);
+        }
+
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "We expect unknown underlying types are configured by application code to be retained.")]
+        private static BoxedBindFormatter MakeTypeConverterBoxedFormatter([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type type)
+        {
+            var typeConverter = TypeDescriptor.GetConverter(type);
             if (typeConverter == null || !typeConverter.CanConvertTo(typeof(string)))
             {
                 throw new InvalidOperationException(
-                    $"The type '{typeof(T).FullName}' does not have an associated {typeof(TypeConverter).Name} that supports " +
+                    $"The type '{type.FullName}' does not have an associated {typeof(TypeConverter).Name} that supports " +
                     $"conversion to a string. " +
                     $"Apply '{typeof(TypeConverterAttribute).Name}' to the type to register a converter.");
             }
 
             return FormatWithTypeConverter;
 
-            string? FormatWithTypeConverter(T value, CultureInfo? culture)
+            string? FormatWithTypeConverter(object? value, CultureInfo? culture)
             {
                 // We intentionally close-over the TypeConverter to cache it. The TypeDescriptor infrastructure is slow.
                 return typeConverter.ConvertToString(context: null, culture ?? CultureInfo.CurrentCulture, value);
@@ -1913,6 +2073,8 @@ public static class BindConverter
 
     internal static class ParserDelegateCache
     {
+        private delegate bool BoxedBindParser(object? obj, CultureInfo? culture, out object? value);
+
         private static readonly ConcurrentDictionary<Type, Delegate> _cache = new ConcurrentDictionary<Type, Delegate>();
 
         static ParserDelegateCache()
@@ -1930,15 +2092,11 @@ public static class BindConverter
         [UnconditionalSuppressMessage(
             "ReflectionAnalysis",
             "IL2060:MakeGenericMethod",
-            Justification = "The referenced methods don't have any DynamicallyAccessedMembers annotations. See https://github.com/mono/linker/issues/1727")]
-        [UnconditionalSuppressMessage(
-            "ReflectionAnalysis",
-            "IL2075:MakeGenericMethod",
-            Justification = "The referenced methods don't have any DynamicallyAccessedMembers annotations. See https://github.com/mono/linker/issues/1727")]
+            Justification = "ConvertToEnum and ConvertToNullableEnum have no DynamicallyAccessedMembers annotations, and MakeArrayTypeConverter is only invoked when dynamic code is supported.")]
         [UnconditionalSuppressMessage(
             "ReflectionAnalysis",
             "IL2076:MakeGenericMethod",
-            Justification = "The referenced methods don't have any DynamicallyAccessedMembers annotations. See https://github.com/mono/linker/issues/1727")]
+            Justification = "MakeArrayTypeConverter requires DynamicallyAccessedMemberTypes.All on the element type, which cannot be statically propagated from T[].")]
         public static BindParser<T> Get<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>()
         {
             if (!_cache.TryGetValue(typeof(T), out var parser))
@@ -2073,9 +2231,16 @@ public static class BindConverter
                 }
                 else if (typeof(T).IsArray)
                 {
-                    var method = _makeArrayTypeConverter ??= typeof(ParserDelegateCache).GetMethod(nameof(MakeArrayTypeConverter), BindingFlags.NonPublic | BindingFlags.Static)!;
-                    var elementType = typeof(T).GetElementType()!;
-                    parser = (Delegate)method.MakeGenericMethod(elementType).Invoke(null, null)!;
+                    if (RuntimeFeature.IsDynamicCodeSupported)
+                    {
+                        var method = _makeArrayTypeConverter ??= typeof(ParserDelegateCache).GetMethod(nameof(MakeArrayTypeConverter), BindingFlags.NonPublic | BindingFlags.Static)!;
+                        var elementType = typeof(T).GetElementType()!;
+                        parser = (Delegate)method.MakeGenericMethod(elementType).Invoke(null, null)!;
+                    }
+                    else
+                    {
+                        parser = MakeArrayTypeConverterDynamicCodeSafe<T>();
+                    }
                 }
                 else
                 {
@@ -2118,44 +2283,246 @@ public static class BindConverter
             }
         }
 
-        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "We expect unknown underlying types are configured by application code to be retained.")]
+        internal static BindParser<T> MakeArrayTypeConverterDynamicCodeSafe<T>()
+        {
+            var elementType = typeof(T).GetElementType()!;
+            var elementParser = GetBoxedParser(elementType);
+
+            return ConvertToArray;
+
+            bool ConvertToArray(object? obj, CultureInfo? culture, [MaybeNullWhen(false)] out T value)
+            {
+                if (TryConvertToArrayCore(obj, culture, elementType, elementParser, out var convertedArray))
+                {
+                    value = (T)(object)convertedArray;
+                    return true;
+                }
+
+                value = default;
+                return false;
+            }
+        }
+
+        [UnconditionalSuppressMessage(
+            "AOT",
+            "IL3050:Calling members annotated with 'RequiresDynamicCodeAttribute' may break functionality when AOT compiling.",
+            Justification = "The target 1D array type T[] is already statically referenced by the caller of ParserDelegateCache.Get<T>().")]
+        private static bool TryConvertToArrayCore(
+            object? obj,
+            CultureInfo? culture,
+            Type elementType,
+            BoxedBindParser elementParser,
+            [NotNullWhen(true)] out Array? convertedArray)
+        {
+            if (obj is not Array initialArray)
+            {
+                convertedArray = null;
+                return false;
+            }
+
+            var result = Array.CreateInstance(elementType, initialArray.Length);
+
+            for (var i = 0; i < initialArray.Length; i++)
+            {
+                if (!elementParser(initialArray.GetValue(i), culture, out var elementValue))
+                {
+                    convertedArray = null;
+                    return false;
+                }
+
+                result.SetValue(elementValue, i);
+            }
+
+            convertedArray = result;
+            return true;
+        }
+
+        [UnconditionalSuppressMessage(
+            "ReflectionAnalysis",
+            "IL2067:UnrecognizedReflectionPattern",
+            Justification = "The element type of T[] cannot statically inherit DynamicallyAccessedMemberTypes.All from T[]. Unknown underlying types used with TypeConverter are expected to be retained by application code.")]
+        private static BoxedBindParser GetBoxedParser(Type type)
+        {
+            if (type == typeof(string))
+            {
+                return WrapParser(ConvertToString);
+            }
+            if (type == typeof(bool))
+            {
+                return WrapParser(ConvertToBool);
+            }
+            if (type == typeof(bool?))
+            {
+                return WrapParser(ConvertToNullableBool);
+            }
+            if (type == typeof(int))
+            {
+                return WrapParser(ConvertToInt);
+            }
+            if (type == typeof(int?))
+            {
+                return WrapParser(ConvertToNullableInt);
+            }
+            if (type == typeof(long))
+            {
+                return WrapParser(ConvertToLong);
+            }
+            if (type == typeof(long?))
+            {
+                return WrapParser(ConvertToNullableLong);
+            }
+            if (type == typeof(short))
+            {
+                return WrapParser(ConvertToShort);
+            }
+            if (type == typeof(short?))
+            {
+                return WrapParser(ConvertToNullableShort);
+            }
+            if (type == typeof(float))
+            {
+                return WrapParser(ConvertToFloat);
+            }
+            if (type == typeof(float?))
+            {
+                return WrapParser(ConvertToNullableFloat);
+            }
+            if (type == typeof(double))
+            {
+                return WrapParser(ConvertToDoubleDelegate);
+            }
+            if (type == typeof(double?))
+            {
+                return WrapParser(ConvertToNullableDoubleDelegate);
+            }
+            if (type == typeof(decimal))
+            {
+                return WrapParser(ConvertToDecimal);
+            }
+            if (type == typeof(decimal?))
+            {
+                return WrapParser(ConvertToNullableDecimal);
+            }
+            if (type == typeof(DateTime))
+            {
+                return WrapParser(ConvertToDateTime);
+            }
+            if (type == typeof(DateTime?))
+            {
+                return WrapParser(ConvertToNullableDateTime);
+            }
+            if (type == typeof(DateTimeOffset))
+            {
+                return WrapParser(ConvertToDateTimeOffset);
+            }
+            if (type == typeof(DateTimeOffset?))
+            {
+                return WrapParser(ConvertToNullableDateTimeOffset);
+            }
+            if (type == typeof(DateOnly))
+            {
+                return WrapParser(ConvertToDateOnly);
+            }
+            if (type == typeof(DateOnly?))
+            {
+                return WrapParser(ConvertToNullableDateOnly);
+            }
+            if (type == typeof(TimeOnly))
+            {
+                return WrapParser(ConvertToTimeOnly);
+            }
+            if (type == typeof(TimeOnly?))
+            {
+                return WrapParser(ConvertToNullableTimeOnly);
+            }
+            if (type == typeof(Guid))
+            {
+                return WrapParser(ConvertToGuid);
+            }
+            if (type == typeof(Guid?))
+            {
+                return WrapParser(ConvertToNullableGuid);
+            }
+            if (type.IsEnum)
+            {
+                return (object? obj, CultureInfo? _, out object? value) => TryConvertToEnumCore(type, obj, out value);
+            }
+            if (Nullable.GetUnderlyingType(type) is Type innerType && innerType.IsEnum)
+            {
+                return (object? obj, CultureInfo? _, out object? value) => TryConvertToEnumCore(innerType, obj, out value);
+            }
+            if (type.IsArray)
+            {
+                var elementType = type.GetElementType()!;
+                var elementParser = GetBoxedParser(elementType);
+                return (object? obj, CultureInfo? culture, out object? value) =>
+                {
+                    var result = TryConvertToArrayCore(obj, culture, elementType, elementParser, out var convertedArray);
+                    value = convertedArray;
+                    return result;
+                };
+            }
+
+            return MakeTypeConverterBoxedParser(type);
+        }
+
+        private static BoxedBindParser WrapParser<T>(BindParser<T> parser)
+            => (object? obj, CultureInfo? culture, out object? value) =>
+            {
+                var result = parser(obj, culture, out var typedValue);
+                value = typedValue;
+                return result;
+            };
+
         private static BindParser<T> MakeTypeConverterConverter<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>()
         {
-            var typeConverter = TypeDescriptor.GetConverter(typeof(T));
+            var boxedParser = MakeTypeConverterBoxedParser(typeof(T));
+            return ConvertWithTypeConverter;
+
+            bool ConvertWithTypeConverter(object? obj, CultureInfo? culture, out T value)
+            {
+                if (boxedParser(obj, culture, out var converted))
+                {
+                    value = converted is null ? default! : (T)converted;
+                    return true;
+                }
+
+                value = default!;
+                return false;
+            }
+        }
+
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "We expect unknown underlying types are configured by application code to be retained.")]
+        private static BoxedBindParser MakeTypeConverterBoxedParser([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type type)
+        {
+            var typeConverter = TypeDescriptor.GetConverter(type);
             if (typeConverter == null || !typeConverter.CanConvertFrom(typeof(string)))
             {
                 throw new InvalidOperationException(
-                    $"The type '{typeof(T).FullName}' does not have an associated {typeof(TypeConverter).Name} that supports " +
+                    $"The type '{type.FullName}' does not have an associated {typeof(TypeConverter).Name} that supports " +
                     $"conversion from a string. " +
                     $"Apply '{typeof(TypeConverterAttribute).Name}' to the type to register a converter.");
             }
 
             return ConvertWithTypeConverter;
 
-            bool ConvertWithTypeConverter(object? obj, CultureInfo? culture, out T value)
+            bool ConvertWithTypeConverter(object? obj, CultureInfo? culture, out object? value)
             {
                 // We intentionally close-over the TypeConverter to cache it. The TypeDescriptor infrastructure is slow.
                 if (obj == null)
                 {
-                    value = default!;
+                    value = null;
                     return true;
                 }
 
                 try
                 {
-                    var converted = typeConverter.ConvertFrom(context: null, culture ?? CultureInfo.CurrentCulture, obj);
-                    if (converted == null)
-                    {
-                        value = default!;
-                        return true;
-                    }
-
-                    value = (T)converted;
+                    value = typeConverter.ConvertFrom(context: null, culture ?? CultureInfo.CurrentCulture, obj);
                     return true;
                 }
                 catch (Exception ex) when (ex is NotSupportedException || ex is FormatException || ex is OverflowException || ex is ArgumentException || ex is JsonException)
                 {
-                    value = default!;
+                    value = null;
                     return false;
                 }
             }

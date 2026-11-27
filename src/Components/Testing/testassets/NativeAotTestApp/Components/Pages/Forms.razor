@@ -30,6 +30,14 @@
         </InputSelect>
     </label>
 
+    <label>
+        Modes
+        <InputSelect id="form-modes" @bind-Value="Model.Modes">
+            <option value="Compact">Compact</option>
+            <option value="Detailed">Detailed</option>
+        </InputSelect>
+    </label>
+
     <label>Nested label <InputText id="form-nested" @bind-Value="Model.Nested.Label" /></label>
     <label>List value <InputText id="form-list" @bind-Value="Model.Items[0].Value" /></label>
 
@@ -46,6 +54,6 @@
     private void HandleValidSubmit()
     {
         _result = $"{Model.Name}|{Model.Count}|{Model.Enabled}|{Model.Mode}|{Model.OptionalMode}|" +
-            $"{Model.Nested.Label}|{Model.Items[0].Value}";
+            $"{Model.Nested.Label}|{Model.Items[0].Value}|{string.Join(",", Model.Modes)}";
     }
 }

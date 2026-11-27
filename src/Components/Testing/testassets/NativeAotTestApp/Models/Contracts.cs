@@ -88,6 +88,8 @@ public sealed class DashboardInput
 
     public InputMode? OptionalMode { get; set; }
 
+    public InputMode[] Modes { get; set; } = [];
+
     public NestedInput Nested { get; } = new();
 
     public List<ListInput> Items { get; } = [new()];

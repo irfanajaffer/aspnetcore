@@ -3,7 +3,10 @@
 
 using System.ComponentModel;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.DotNet.RemoteExecutor;
 
 namespace Microsoft.AspNetCore.Components;
 
@@ -490,12 +493,106 @@ public class BindConverterTest
         Assert.Equal(default(uint), actual);
     }
 
+    [Fact]
+    public void MakeArrayTypeConverterDynamicCodeSafe_MatchesDynamicCodePath()
+    {
+        var intParser = BindConverter.ParserDelegateCache.MakeArrayTypeConverterDynamicCodeSafe<int[]>();
+        Assert.True(intParser(new[] { "1", "2", "3" }, CultureInfo.InvariantCulture, out var ints));
+        Assert.Equal(new[] { 1, 2, 3 }, ints);
+
+        var nullableIntParser = BindConverter.ParserDelegateCache.MakeArrayTypeConverterDynamicCodeSafe<int?[]>();
+        Assert.True(nullableIntParser(new[] { "1", "", "3" }, CultureInfo.InvariantCulture, out var nullableInts));
+        Assert.Equal(new int?[] { 1, null, 3 }, nullableInts);
+
+        var enumParser = BindConverter.ParserDelegateCache.MakeArrayTypeConverterDynamicCodeSafe<SomeLetters[]>();
+        Assert.True(enumParser(new[] { "A", "Q" }, CultureInfo.InvariantCulture, out var enums));
+        Assert.Equal(new[] { SomeLetters.A, SomeLetters.Q }, enums);
+
+        var nullableEnumParser = BindConverter.ParserDelegateCache.MakeArrayTypeConverterDynamicCodeSafe<SomeLetters?[]>();
+        Assert.True(nullableEnumParser(new[] { "A", "", "Q" }, CultureInfo.InvariantCulture, out var nullableEnums));
+        Assert.Equal(new SomeLetters?[] { SomeLetters.A, null, SomeLetters.Q }, nullableEnums);
+
+        var customValueParser = BindConverter.ParserDelegateCache.MakeArrayTypeConverterDynamicCodeSafe<CustomStruct[]>();
+        Assert.True(customValueParser(new[] { "10", "20" }, CultureInfo.InvariantCulture, out var structs));
+        Assert.Equal(new[] { new CustomStruct(10), new CustomStruct(20) }, structs);
+
+        var jaggedParser = BindConverter.ParserDelegateCache.MakeArrayTypeConverterDynamicCodeSafe<int[][]>();
+        Assert.True(jaggedParser(new[] { new[] { "1", "2" }, new[] { "3" } }, CultureInfo.InvariantCulture, out var jagged));
+        Assert.Equal(new[] { new[] { 1, 2 }, new[] { 3 } }, jagged);
+
+        Assert.False(intParser(new[] { "1", "not-an-int" }, CultureInfo.InvariantCulture, out var invalidInts));
+        Assert.Null(invalidInts);
+    }
+
+    [Fact]
+    public void MakeArrayFormatterDynamicCodeSafe_MatchesDynamicCodePath()
+    {
+        var intFormatter = BindConverter.FormatterDelegateCache.MakeArrayFormatterDynamicCodeSafe<int[]>();
+        Assert.Equal("[\"1\", \"2\", \"3\"]", intFormatter(new[] { 1, 2, 3 }, CultureInfo.InvariantCulture));
+        Assert.Equal("[]", intFormatter(Array.Empty<int>(), CultureInfo.InvariantCulture));
+
+        var nullableIntFormatter = BindConverter.FormatterDelegateCache.MakeArrayFormatterDynamicCodeSafe<int?[]>();
+        Assert.Equal("[\"1\", \"\", \"3\"]", nullableIntFormatter(new int?[] { 1, null, 3 }, CultureInfo.InvariantCulture));
+
+        var enumFormatter = BindConverter.FormatterDelegateCache.MakeArrayFormatterDynamicCodeSafe<SomeLetters[]>();
+        Assert.Equal("[\"A\", \"Q\"]", enumFormatter(new[] { SomeLetters.A, SomeLetters.Q }, CultureInfo.InvariantCulture));
+
+        var customValueFormatter = BindConverter.FormatterDelegateCache.MakeArrayFormatterDynamicCodeSafe<CustomStruct[]>();
+        Assert.Equal("[\"10\", \"20\"]", customValueFormatter(new[] { new CustomStruct(10), new CustomStruct(20) }, CultureInfo.InvariantCulture));
+
+        var jaggedFormatter = BindConverter.FormatterDelegateCache.MakeArrayFormatterDynamicCodeSafe<int[][]>();
+        Assert.Equal("[\"[\\u00221\\u0022, \\u00222\\u0022]\", \"[\\u00223\\u0022]\"]", jaggedFormatter(new[] { new[] { 1, 2 }, new[] { 3 } }, CultureInfo.InvariantCulture));
+    }
+
+    [ConditionalFact]
+    [RemoteExecutionSupported]
+    public void ArrayConversionAndFormatting_WorksWhenDynamicCodeNotSupported()
+    {
+        var options = new RemoteInvokeOptions();
+        options.RuntimeConfigurationOptions.Add("System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported", "false");
+
+        using var remoteHandle = RemoteExecutor.Invoke(static () =>
+        {
+            Assert.False(RuntimeFeature.IsDynamicCodeSupported);
+
+            Assert.True(BindConverter.TryConvertTo<int[]>(new[] { "1", "2", "3" }, CultureInfo.InvariantCulture, out var ints));
+            Assert.Equal(new[] { 1, 2, 3 }, ints);
+            Assert.Equal("[\"1\", \"2\", \"3\"]", BindConverter.FormatValue(ints, CultureInfo.InvariantCulture));
+
+            Assert.True(BindConverter.TryConvertTo<SomeLetters[]>(new[] { "A", "Q" }, CultureInfo.InvariantCulture, out var enums));
+            Assert.Equal(new[] { SomeLetters.A, SomeLetters.Q }, enums);
+            Assert.Equal("[\"A\", \"Q\"]", BindConverter.FormatValue(enums, CultureInfo.InvariantCulture));
+
+            Assert.True(BindConverter.TryConvertTo<CustomStruct[]>(new[] { "7", "8" }, CultureInfo.InvariantCulture, out var structs));
+            Assert.Equal(new[] { new CustomStruct(7), new CustomStruct(8) }, structs);
+            Assert.Equal("[\"7\", \"8\"]", BindConverter.FormatValue(structs, CultureInfo.InvariantCulture));
+        }, options);
+    }
+
     private enum SomeLetters
     {
         A,
         B,
         C,
         Q,
+    }
+
+    [TypeConverter(typeof(CustomStructConverter))]
+    private readonly record struct CustomStruct(int Id);
+
+    private sealed class CustomStructConverter : TypeConverter
+    {
+        public override bool CanConvertFrom(ITypeDescriptorContext context, Type sourceType)
+            => sourceType == typeof(string);
+
+        public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
+            => value is string text ? new CustomStruct(int.Parse(text, CultureInfo.InvariantCulture)) : base.ConvertFrom(context, culture, value);
+
+        public override bool CanConvertTo(ITypeDescriptorContext context, Type destinationType)
+            => destinationType == typeof(string);
+
+        public override object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
+            => destinationType == typeof(string) && value is CustomStruct s ? s.Id.ToString(CultureInfo.InvariantCulture) : base.ConvertTo(context, culture, value, destinationType);
     }
 
     [TypeConverter(typeof(PersonConverter))]

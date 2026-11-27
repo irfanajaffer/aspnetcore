@@ -79,12 +79,13 @@ public partial class NativeAotFeatureTests : BrowserTest
         await _page.Locator("#form-enabled").CheckAsync();
         await _page.Locator("#form-mode").SelectOptionAsync("Detailed");
         await _page.Locator("#form-optional-mode").SelectOptionAsync("Compact");
+        await _page.Locator("#form-modes").SelectOptionAsync(["Compact", "Detailed"]);
         await _page.Locator("#form-nested").FillAsync("west");
         await _page.Locator("#form-list").FillAsync("resource-1");
         await _page.Locator("#form-submit").ClickAsync();
 
         await Expect(_page.Locator("#form-result"))
-            .ToHaveTextAsync("worker|12|True|Detailed|Compact|west|resource-1");
+            .ToHaveTextAsync("worker|12|True|Detailed|Compact|west|resource-1|Compact,Detailed");
         await AssertHealthyAsync();
     }
 
